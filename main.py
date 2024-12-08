@@ -3,16 +3,18 @@ import random
 import time
 import json
 
-# Configurations du
+# Configurations du GAME_MODES
 GAME_MODES = {
     'standard': False,
     'decay': False,
     'two_player': False,
     'Polymynos_arbitraire': False
 }
+
 POINT_AVEC_NIVEAU = False
 DECAY_INTERVAL = 30
 POLYMINO_HISTORY = []
+
 
 # Tetrominos
 Tetrominos = [
@@ -81,7 +83,7 @@ def mode_decay(jeu):
         jeu['last_decay_time'] = temps_actuel
 
 
-def load_game(filename='tetris_save.json'):
+def charge_jeu(filename='tetris_save.json'):
     """charge le jeu d'un fichier json"""
     try:
         with open(filename, 'r') as f:
@@ -118,7 +120,7 @@ def load_game(filename='tetris_save.json'):
         return None
 
 
-def save_game(jeu, filename='tetris_save.json'):
+def sauvergarde_jeu(jeu, filename='tetris_save.json'):
     """sauvegarde le jeu dans un fichier json"""
     try:
         save_data = {
@@ -211,11 +213,10 @@ def mode_selection_menu():
                 return None
             elif touche_pressee == 'l':
                 # Option pour charger une partie
-                loaded_game = load_game()
+                loaded_game = charge_jeu()
                 if loaded_game:
                     ferme_fenetre()
                     return loaded_game
-
     return None
 
 
@@ -525,6 +526,10 @@ def pause(jeu):
                 touche_pressee = touche(ev)
                 if touche_pressee == 'p':  # Si 'p' est pressé, sort de la pause
                     return
+                elif touche_pressee=='s':
+                    sauvergarde_jeu(jeu,filename="tetris_save.json")
+                elif touche_pressee=='l':
+                    charge_jeu('tetris_save.json')
 
 
 def initialiser_fenetre():
@@ -570,7 +575,7 @@ def traiter_touche(touche_pressee, jeu):
 
     # Nouvelles touches
     elif touche_pressee == 's':  # Sauvegarder
-        save_game(jeu)
+        sauvergarde_jeu(jeu)
     elif touche_pressee == 'p':  # Pause
         pause(jeu)
     elif touche_pressee == 'm':  # Retour au menu
@@ -601,7 +606,7 @@ def attendre_fin():
 def charger_Poly():
     # Remplacement si le fichier contient des polyominos
     global Tetrominos
-    nom_fichier_polyominos = "polyominos.txt"
+    nom_fichier_polyominos = ""
     nouveaux_polyominos = lire_polyominos_et_remplacer(nom_fichier_polyominos)
 
     if nouveaux_polyominos:
@@ -668,7 +673,6 @@ def dessiner_jeu_deux_joueurs(jeu):
     dessiner_piece_courante_specifique(jeu, 'player2', LARGEUR_PLATEAU * TAILLE_BLOC)
     dessiner_scores_specifique(jeu, 'player2', LARGEUR_PLATEAU * TAILLE_BLOC)
     dessiner_prochaine_piece_specifique(jeu, 'player2', LARGEUR_PLATEAU * TAILLE_BLOC)
-
     mise_a_jour()
 
 
@@ -920,7 +924,6 @@ def fusionner_piece_deux(jeu, joueur):
     couleur = piece['couleur']
     hauteur = len(forme)
     largeur = len(forme[0])
-
     for rel_y in range(hauteur):
         for rel_x in range(largeur):
             if forme[rel_y][rel_x]:
