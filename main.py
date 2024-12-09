@@ -903,7 +903,7 @@ def verifier_lignes_deux(jeu, joueur):
 
     # Met à jour le score et le niveau en fonction des lignes effacées
     # Logique d'attaque entre joueurs
-    if lignes_vides >= 1:
+    if lignes_vides >= 2:
         # Détermine le joueur à attaquer
         joueur_cible = 'player2' if joueur == 'player1' else 'player1'
 
