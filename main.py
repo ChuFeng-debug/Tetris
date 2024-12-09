@@ -69,14 +69,14 @@ def mode_decay(jeu):
     """Implement du desagrement"""
     temps_actuel = time.time()
     if temps_actuel - jeu.get('last_decay_time', 0) > DECAY_INTERVAL:
-        occupied_cells = [
+        cellule_occupe = [
             (y, x) for y in range(TAILLE_GRILLE)
             for x in range(LARGEUR_PLATEAU)
             if jeu['grille'][y][x] is not None
         ]
 
-        if occupied_cells:
-            y, x = random.choice(occupied_cells)
+        if cellule_occupe:
+            y, x = random.choice(cellule_occupe)
             jeu['grille'][y][x] = None
 
         jeu['last_decay_time'] = temps_actuel
