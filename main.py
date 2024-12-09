@@ -7,7 +7,7 @@ import json
 GAME_MODES = {
     'standard': False,
     'decay': False,
-    'two_player': False,
+    'deux_joueur': False,
     'Polymynos_arbitraire': False
 }
 
@@ -72,13 +72,12 @@ def mode_decay(jeu):
         occupied_cells = [
             (y, x) for y in range(TAILLE_GRILLE)
             for x in range(LARGEUR_PLATEAU)
-            if jeu['grid'][y][x] is not None
+            if jeu['grille'][y][x] is not None
         ]
 
         if occupied_cells:
-            # Choose and remove a random block
             y, x = random.choice(occupied_cells)
-            jeu['grid'][y][x] = None
+            jeu['grille'][y][x] = None
 
         jeu['last_decay_time'] = temps_actuel
 
@@ -89,24 +88,21 @@ def charge_jeu(filename='tetris_save.json'):
         with open(filename, 'r') as f:
             save_data = json.load(f)
 
-        # Recreate game state
         jeu = creer_etat_jeu()
-        jeu['grid'] = save_data['grid']
-        jeu['current_piece'] = save_data['current_piece']
-        jeu['next_piece'] = save_data['next_piece']
+        jeu['grille'] = save_data['grille']
+        jeu['piece_courante'] = save_data['piece_courante']
+        jeu['prochaine_piece'] = save_data['prochaine_piece']
         jeu['score'] = save_data['score']
         jeu['level'] = save_data['level']
-        jeu['lines_cleared'] = save_data['lines_cleared']
+        jeu['ligne_netoye'] = save_data['ligne_netoye']
 
-        # Update global configurations from saved game
         global GAME_MODES, POINT_AVEC_NIVEAU
         GAME_MODES['standard'] = save_data.get('game_modes', {}).get('standard', True)
         GAME_MODES['decay'] = save_data.get('game_modes', {}).get('decay', False)
-        GAME_MODES['two_player'] = save_data.get('game_modes', {}).get('two_player', False)
+        GAME_MODES['deux_joueur'] = save_data.get('game_modes', {}).get('deux_joueur', False)
         GAME_MODES['Polymynos_arbitraire'] = save_data.get('game_mode', {}).get('Polymynos_arbitraire', False)
         POINT_AVEC_NIVEAU = save_data.get('points_with_level', False)
 
-        # Add missing attributes for game update
         jeu['dernier_tombe'] = time.time()
         jeu['vitesse_tombe'] = 1.0
 
@@ -124,12 +120,12 @@ def sauvergarde_jeu(jeu, filename='tetris_save.json'):
     """sauvegarde le jeu dans un fichier json"""
     try:
         save_data = {
-            'grid': jeu['grid'],
-            'current_piece': jeu['current_piece'],
-            'next_piece': jeu['next_piece'],
+            'grille': jeu['grille'],
+            'piece_courante': jeu['piece_courante'],
+            'prochaine_piece': jeu['prochaine_piece'],
             'score': jeu['score'],
             'level': jeu['level'],
-            'lines_cleared': jeu['lines_cleared'],
+            'ligne_netoye': jeu['ligne_netoye'],
             'game_modes': GAME_MODES,
             'points_with_level': POINT_AVEC_NIVEAU,
             'dernier_tombe': jeu.get('dernier_tombe', time.time()),
@@ -205,7 +201,7 @@ def mode_selection_menu():
                 global GAME_MODES, POINT_AVEC_NIVEAU
                 GAME_MODES['standard'] = selected_modes[0]
                 GAME_MODES['decay'] = selected_modes[1]
-                GAME_MODES['two_player'] = selected_modes[2]
+                GAME_MODES['deux_joueur'] = selected_modes[2]
                 GAME_MODES['Polymynos_arbitraire'] = selected_modes[4]
                 POINT_AVEC_NIVEAU = selected_modes[3]
 
@@ -247,7 +243,7 @@ def piece_en_collision(jeu, piece):
                 # Vérifie les limites de la grille ou une collision avec une cellule occupée
                 if grille_x < 0 or grille_x >= LARGEUR_PLATEAU or grille_y >= TAILLE_GRILLE:
                     return True
-                if grille_y >= 0 and jeu['grid'][grille_y][grille_x] is not None:
+                if grille_y >= 0 and jeu['grille'][grille_y][grille_x] is not None:
                     return True
     return False
 
@@ -273,7 +269,7 @@ def nouvelle_forme_rotatee(piece):
 
 def appliquer_rotation_si_possible(jeu):
     """Déplace la pièce courante de dx et dy, fusionne si une collision empêche le déplacement."""
-    piece = jeu['current_piece']
+    piece = jeu['piece_courante']
     ancienne_forme = piece['forme']
     piece['forme'] = nouvelle_forme_rotatee(piece)
     if piece_en_collision(jeu, piece):
@@ -282,7 +278,7 @@ def appliquer_rotation_si_possible(jeu):
 
 def appliquer_deplacement(jeu, dx, dy):
     """Déplace la pièce courante de dx et dy, fusionne si une collision empêche le déplacement."""
-    piece = jeu['current_piece']
+    piece = jeu['piece_courante']
     piece['x'] += dx
     piece['y'] += dy
     if piece_en_collision(jeu, piece):
@@ -305,15 +301,15 @@ def verifier_lignes(jeu):
     for y in range(TAILLE_GRILLE):
         ligne_complete = True
         for x in range(LARGEUR_PLATEAU):
-            if jeu['grid'][y][x] is None:
+            if jeu['grille'][y][x] is None:
                 ligne_complete = False
                 break
 
         if ligne_complete:
-            jeu['grid'].pop(y)
+            jeu['grille'].pop(y)
 
             ligne_vide = [None] * LARGEUR_PLATEAU
-            jeu['grid'].insert(0, ligne_vide)
+            jeu['grille'].insert(0, ligne_vide)
 
             lignes_vides += 1
 
@@ -327,7 +323,7 @@ def verifier_lignes(jeu):
 
 def fusionner_piece(jeu):
     """Ajoute la pièce courante à la grille, en fonction de sa position et de sa couleur."""
-    piece = jeu['current_piece']
+    piece = jeu['piece_courante']
     forme = piece['forme']
     couleur = piece['couleur']
     hauteur = len(forme)
@@ -339,12 +335,12 @@ def fusionner_piece(jeu):
                 grille_y, grille_x = piece['y'] + rel_y, piece['x'] + rel_x
                 POLYMINO.append([grille_y, grille_x])  # Sauvegarde de la piece occupe(pour les prochaines variantes)
                 if grille_y >= 0:  # Ne pas dessiner en dehors de la grille
-                    jeu['grid'][grille_y][grille_x] = couleur
+                    jeu['grille'][grille_y][grille_x] = couleur
 
 
 def mise_a_jour_score_et_niveau(jeu, lignes_vides):
     """Met à jour le score et le niveau en fonction des lignes complètes."""
-    jeu['lines_cleared'] += lignes_vides
+    jeu['ligne_netoye'] += lignes_vides
     point = 0
     if lignes_vides == 1:
         point += 40
@@ -362,31 +358,31 @@ def mise_a_jour_score_et_niveau(jeu, lignes_vides):
         point *= jeu['level']
 
     jeu['score'] += point
-    jeu['level'] = jeu['lines_cleared'] // 5 + 1
+    jeu['level'] = jeu['ligne_netoye'] // 5 + 1
 
 
 def nouvelle_piece(jeu):
     """Génère une nouvelle pièce et la positionne en haut de la grille, termine le jeu si collision."""
-    if jeu['next_piece'] is None:
-        jeu['next_piece'] = creer_piece()  # Crée la première pièce suivante
+    if jeu['prochaine_piece'] is None:
+        jeu['prochaine_piece'] = creer_piece()  # Crée la première pièce suivante
 
-    jeu['current_piece'] = jeu['next_piece']  # Utilise la pièce suivante comme pièce courante
-    jeu['next_piece'] = creer_piece()  # Crée une nouvelle pièce suivante
+    jeu['piece_courante'] = jeu['prochaine_piece']  # Utilise la pièce suivante comme pièce courante
+    jeu['prochaine_piece'] = creer_piece()  # Crée une nouvelle pièce suivante
 
-    if piece_en_collision(jeu, jeu['current_piece']):
+    if piece_en_collision(jeu, jeu['piece_courante']):
         jeu['game_over'] = True
 
 
 def dessiner_prochaine_piece(jeu):
     """Dessine la prochaine pièce dans une zone à droite du plateau."""
-    if jeu['next_piece']:
+    if jeu['prochaine_piece']:
         # Position de la zone d'aperçu
         preview_x = LARGEUR_PLATEAU * TAILLE_BLOC + 25
         preview_y = 200
 
         texte(preview_x - 20, preview_y - 30, "Prochaine", "black")
 
-        piece = jeu['next_piece']
+        piece = jeu['prochaine_piece']
         forme = piece['forme']
         couleur = piece['couleur']
 
@@ -431,13 +427,13 @@ def creer_etat_jeu():
     """Initialise l'état de jeu avec une grille vide et les valeurs de départ."""
 
     return {
-        'grid': creer_grille(),
-        'current_piece': None,
-        'next_piece': None,
+        'grille': creer_grille(),
+        'piece_courante': None,
+        'prochaine_piece': None,
         'game_over': False,
         'score': 0,
         'level': 1,
-        'lines_cleared': 0
+        'ligne_netoye': 0
     }
 
 
@@ -456,7 +452,7 @@ def dessiner_contenu_grille(jeu):
     """Dessine le contenu actuel de la grille."""
     for y in range(TAILLE_GRILLE):
         for x in range(LARGEUR_PLATEAU):
-            color = jeu['grid'][y][x]
+            color = jeu['grille'][y][x]
             if color:
                 rectangle(x * TAILLE_BLOC, y * TAILLE_BLOC,
                           (x + 1) * TAILLE_BLOC, (y + 1) * TAILLE_BLOC,
@@ -465,8 +461,8 @@ def dessiner_contenu_grille(jeu):
 
 def dessiner_piece_courante(jeu):
     """Dessine la pièce courante sur la grille."""
-    if jeu['current_piece']:
-        piece = jeu['current_piece']
+    if jeu['piece_courante']:
+        piece = jeu['piece_courante']
         forme = piece['forme']
         couleur = piece['couleur']
         hauteur = len(forme)
@@ -487,7 +483,7 @@ def dessiner_scores(jeu):
     """Dessine le score, le niveau et le nombre de lignes effacées."""
     texte(LARGEUR_PLATEAU * TAILLE_BLOC + 20, 50, "Score: " + str(jeu['score']), "black")
     texte(LARGEUR_PLATEAU * TAILLE_BLOC + 20, 80, "Niveau: " + str(jeu['level']), "black")
-    texte(LARGEUR_PLATEAU * TAILLE_BLOC + 20, 110, "Lignes: " + str(jeu['lines_cleared']), "black")
+    texte(LARGEUR_PLATEAU * TAILLE_BLOC + 20, 110, "Lignes: " + str(jeu['ligne_netoye']), "black")
     if jeu['game_over']:
         texte(LARGEUR_PLATEAU * TAILLE_BLOC // 2 - 40, TAILLE_GRILLE * TAILLE_BLOC // 2, "GAME OVER", "red")
 
@@ -511,7 +507,7 @@ def pause(jeu):
     global GAME_MODES
     while True:  # Boucle d'attente
         efface_tout()
-        if GAME_MODES['two_player']:
+        if GAME_MODES['deux_joueur']:
             dessiner_jeu_deux_joueurs(jeu)
             texte(LARGEUR_PLATEAU * TAILLE_BLOC - 40, TAILLE_GRILLE * TAILLE_BLOC // 2, "PAUSE", "white")
         else:
@@ -541,7 +537,7 @@ def initialiser_jeu():
     """Initialise l'état du jeu avec les options choisies."""
     jeu = creer_etat_jeu()
     jeu['points_with_level'] = POINT_AVEC_NIVEAU
-    jeu['next_piece'] = creer_piece()
+    jeu['prochaine_piece'] = creer_piece()
     nouvelle_piece(jeu)
     jeu['dernier_tombe'] = time.time()
     jeu['vitesse_tombe'] = 1.0
@@ -628,24 +624,24 @@ def creer_etat_jeu_deux_joueurs():
     """Initialise l'état de jeu pour deux joueurs."""
     return {
         'player1': {
-            'grid': creer_grille(),
-            'current_piece': None,
-            'next_piece': None,
+            'grille': creer_grille(),
+            'piece_courante': None,
+            'prochaine_piece': None,
             'game_over': False,
             'score': 0,
             'level': 1,
-            'lines_cleared': 0,
+            'ligne_netoye': 0,
             'dernier_tombe': time.time(),
             'vitesse_tombe': 1.0
         },
         'player2': {
-            'grid': creer_grille(),
-            'current_piece': None,
-            'next_piece': None,
+            'grille': creer_grille(),
+            'piece_courante': None,
+            'prochaine_piece': None,
             'game_over': False,
             'score': 0,
             'level': 1,
-            'lines_cleared': 0,
+            'ligne_netoye': 0,
             'dernier_tombe': time.time(),
             'vitesse_tombe': 1.0
         },
@@ -692,7 +688,7 @@ def dessiner_contenu_grille_specifique(jeu, joueur, offset_x):
     """Dessine le contenu de la grille pour un joueur spécifique."""
     for y in range(TAILLE_GRILLE):
         for x in range(LARGEUR_PLATEAU):
-            color = jeu[joueur]['grid'][y][x]
+            color = jeu[joueur]['grille'][y][x]
             if color:
                 rectangle(offset_x + x * TAILLE_BLOC, y * TAILLE_BLOC,
                           offset_x + (x + 1) * TAILLE_BLOC, (y + 1) * TAILLE_BLOC,
@@ -701,8 +697,8 @@ def dessiner_contenu_grille_specifique(jeu, joueur, offset_x):
 
 def dessiner_piece_courante_specifique(jeu, joueur, offset_x):
     """Dessine la pièce courante pour un joueur spécifique."""
-    if jeu[joueur]['current_piece']:
-        piece = jeu[joueur]['current_piece']
+    if jeu[joueur]['piece_courante']:
+        piece = jeu[joueur]['piece_courante']
         forme = piece['forme']
         couleur = piece['couleur']
         hauteur = len(forme)
@@ -729,7 +725,7 @@ def dessiner_scores_specifique(jeu, joueur, offset_x):
     texte(offset_x + LARGEUR_PLATEAU * TAILLE_BLOC + 20, base_y + 30,
           f"{joueur.capitalize()} Niveau: " + str(jeu[joueur]['level']), "black")
     texte(offset_x + LARGEUR_PLATEAU * TAILLE_BLOC + 20, base_y + 60,
-          f"{joueur.capitalize()} Lignes: " + str(jeu[joueur]['lines_cleared']), "black")
+          f"{joueur.capitalize()} Lignes: " + str(jeu[joueur]['ligne_netoye']), "black")
 
     if jeu[joueur]['game_over']:
         if joueur == 'player1':
@@ -741,7 +737,7 @@ def dessiner_scores_specifique(jeu, joueur, offset_x):
 
 def dessiner_prochaine_piece_specifique(jeu, joueur, offset_x):
     """Dessine la prochaine pièce pour un joueur spécifique."""
-    if jeu[joueur]['next_piece']:
+    if jeu[joueur]['prochaine_piece']:
         preview_x = offset_x + LARGEUR_PLATEAU * TAILLE_BLOC + 25
         preview_y = 200
         if joueur == "player1":
@@ -749,7 +745,7 @@ def dessiner_prochaine_piece_specifique(jeu, joueur, offset_x):
 
         texte(preview_x - 20, preview_y - 30, f"Prochaine {joueur.capitalize()}", "black")
 
-        piece = jeu[joueur]['next_piece']
+        piece = jeu[joueur]['prochaine_piece']
         forme = piece['forme']
         couleur = piece['couleur']
 
@@ -768,7 +764,7 @@ def dessiner_prochaine_piece_specifique(jeu, joueur, offset_x):
 
 def appliquer_deplacement_deux(jeu, dx, dy, joueur):
     """Déplace la pièce courante de dx et dy, fusionne si une collision empêche le déplacement."""
-    piece = jeu[joueur]['current_piece']
+    piece = jeu[joueur]['piece_courante']
     piece['x'] += dx
     piece['y'] += dy
     if piece_en_collision(jeu[joueur], piece):
@@ -841,13 +837,13 @@ def mettre_a_jour_jeu_deux_joueurs(jeu):
 
 def nouvelle_piece_deux_joueurs(jeu, joueur):
     """Génère une nouvelle pièce pour un joueur spécifique."""
-    if jeu[joueur]['next_piece'] is None:
-        jeu[joueur]['next_piece'] = creer_piece()
+    if jeu[joueur]['prochaine_piece'] is None:
+        jeu[joueur]['prochaine_piece'] = creer_piece()
 
-    jeu[joueur]['current_piece'] = jeu[joueur]['next_piece']
-    jeu[joueur]['next_piece'] = creer_piece()
+    jeu[joueur]['piece_courante'] = jeu[joueur]['prochaine_piece']
+    jeu[joueur]['prochaine_piece'] = creer_piece()
 
-    if piece_en_collision(jeu[joueur], jeu[joueur]['current_piece']):
+    if piece_en_collision(jeu[joueur], jeu[joueur]['piece_courante']):
         jeu[joueur]['game_over'] = True
         jeu['game_over'] = True
 
@@ -870,11 +866,11 @@ def ajouter_lignes_attaque(jeu, joueur_attaquant, joueur_defenseur, nb_lignes):
     """
     # Supprimer les lignes du bas du plateau
     for _ in range(nb_lignes):
-        jeu[joueur_defenseur]['grid'].pop(0)
+        jeu[joueur_defenseur]['grille'].pop(0)
 
         # Ajouter de nouvelles lignes avec un trou
         nouvelle_ligne = generer_ligne_avec_trou(LARGEUR_PLATEAU)
-        jeu[joueur_defenseur]['grid'].append(nouvelle_ligne)
+        jeu[joueur_defenseur]['grille'].append(nouvelle_ligne)
 
 
 def verifier_lignes_deux(jeu, joueur):
@@ -889,15 +885,15 @@ def verifier_lignes_deux(jeu, joueur):
     for y in range(TAILLE_GRILLE):
         ligne_complete = True
         for x in range(LARGEUR_PLATEAU):
-            if jeu[joueur]['grid'][y][x] is None:
+            if jeu[joueur]['grille'][y][x] is None:
                 ligne_complete = False
                 break
 
         if ligne_complete:
-            jeu[joueur]['grid'].pop(y)
+            jeu[joueur]['grille'].pop(y)
 
             ligne_vide = [None] * LARGEUR_PLATEAU
-            jeu[joueur]['grid'].insert(0, ligne_vide)
+            jeu[joueur]['grille'].insert(0, ligne_vide)
 
             lignes_vides += 1
 
@@ -919,7 +915,7 @@ def fusionner_piece_deux(jeu, joueur):
 
     Ajoute la pièce courante à la grille du joueur spécifié.
     """
-    piece = jeu[joueur]['current_piece']
+    piece = jeu[joueur]['piece_courante']
     forme = piece['forme']
     couleur = piece['couleur']
     hauteur = len(forme)
@@ -929,7 +925,7 @@ def fusionner_piece_deux(jeu, joueur):
             if forme[rel_y][rel_x]:
                 grille_y, grille_x = piece['y'] + rel_y, piece['x'] + rel_x
                 if grille_y >= 0:  # Ne pas dessiner en dehors de la grille
-                    jeu[joueur]['grid'][grille_y][grille_x] = couleur
+                    jeu[joueur]['grille'][grille_y][grille_x] = couleur
 
 
 def main():
@@ -937,13 +933,13 @@ def main():
     # Sélection du mode de jeu
     jeu = mode_selection_menu()
 
-    if jeu is None and GAME_MODES['two_player']:
+    if jeu is None and GAME_MODES['deux_joueur']:
         global WINDOW_WIDTH
 
         WINDOW_WIDTH *= 2
         jeu = creer_etat_jeu_deux_joueurs()
-        jeu['player1']['next_piece'] = creer_piece()
-        jeu['player2']['next_piece'] = creer_piece()
+        jeu['player1']['prochaine_piece'] = creer_piece()
+        jeu['player2']['prochaine_piece'] = creer_piece()
         nouvelle_piece_deux_joueurs(jeu, 'player1')
         nouvelle_piece_deux_joueurs(jeu, 'player2')
         initialiser_fenetre2()
