@@ -1,21 +1,26 @@
 from fltk import *
 import random
 import time
-import json
+import json 
 
-# Configurations du GAME_MODES
+# Configurations des mode de jeu
 GAME_MODES = {
     'standard': False,
     'decay': False,
-    'deux_joueur': False,
-    'Polymynos_arbitraire': False
+    'two_player': False,
+    'Polymynos_arbitraire': False,
+    'Couleur_adjacente':False
 }
 
-POINT_AVEC_NIVEAU = False
-DECAY_INTERVAL = 30
-POLYMINO_HISTORY = []
 
+POINTS_WITH_LEVEL_ENABLED = False
+DECAY_INTERVAL = 30 
+POLYMINO_HISTORY = []  
+temp_depuis_bonus=time.time()
+Tetromino_history={'cyan':[], 'yellow':[], 'purple':[], 'orange':[], 'blue':[], 'red':[], 'green':[]}
 
+BLOC_BONUS=[]
+Multiplicateur=1
 # Tetrominos
 Tetrominos = [
     [[1, 1, 1, 1]],
@@ -28,6 +33,64 @@ Tetrominos = [
 ]
 
 
+
+def effacage_du_plateau_entier(jeu):
+    for ligne in range(len(jeu['grid'])):
+        for elem in range(len(jeu['grid'][0])):
+            if jeu['grid'][ligne][elem] is not None:
+                jeu['grid'][ligne][elem]=None
+
+
+def Desactiver_bonus(jeu):
+    global temp_depuis_bonus,Multiplicateur
+    if time.time()-temp_depuis_bonus>10:
+      Multiplicateur=1
+
+
+
+def Bonus_gravite(jeu):
+    M=jeu['grid']
+    for j in range(len(M[0])):
+        colonne = [M[i][j] for i in range(len(M)) if M[i][j] is not None]
+        colonne = [None] * (len(M) - len(colonne)) + colonne
+        for i in range(len(M)):
+            M[i][j] = colonne[i]
+
+
+def point_bonus(jeu):
+    global Multiplicateur
+    Multiplicateur+=1
+
+def eliminer_lignes_lambda(jeu):
+    pass
+
+def appliquer_bonus(jeu):
+    chance=random.randint(0,2)
+    if chance==0:
+        effacage_du_plateau_entier(jeu)
+    elif chance==1:
+        Bonus_gravite(jeu)
+    else:
+        point_bonus(jeu)
+
+
+def piece_aleatoire_bonus(jeu):
+    global BLOC_BONUS
+    occupied_cells = [
+            (y, x) for y in range(GRID_HEIGHT) 
+            for x in range(LARGEUR_PLATEAU) 
+            if jeu['grid'][y][x] is not None
+        ]
+
+    if occupied_cells:
+        # Choose and remove a random block
+        y, x = random.choice(occupied_cells)
+        BLOC_BONUS.append(y)
+        jeu['grid'][y][x] = '#fdd700'
+
+    
+
+
 def lire_polyominos_et_remplacer(nom_fichier):
     """
     Lit un fichier contenant des polyominos et remplace la liste Tetrominos si le fichier n'est pas vide.
@@ -35,7 +98,7 @@ def lire_polyominos_et_remplacer(nom_fichier):
     try:
         with open(nom_fichier, "r") as fichier:
             contenu = fichier.read().strip()
-
+        
         if not contenu:
             print("Fichier vide, Tetrominos par défaut utilisés.")
             return None  # Indique qu'on doit conserver les Tetrominos par défaut
@@ -47,7 +110,7 @@ def lire_polyominos_et_remplacer(nom_fichier):
         for bloc in blocs:
             lignes = bloc.split("\n")
             max_largeur = max(len(ligne) for ligne in lignes)
-
+            
             # Construire la matrice pour ce polyomino
             matrice = []
             for ligne in lignes:
@@ -55,57 +118,67 @@ def lire_polyominos_et_remplacer(nom_fichier):
                 # Compléter les lignes pour avoir une largeur uniforme
                 row += [0] * (max_largeur - len(row))
                 matrice.append(row)
-
+            
             nouveaux_tetrominos.append(matrice)
-
+        
         return nouveaux_tetrominos
-
+    
     except FileNotFoundError:
         print(f"Erreur : le fichier {nom_fichier} est introuvable.")
         return None
 
 
+
+
+
+
 def mode_decay(jeu):
-    """Implement du desagrement"""
+    """Implement block decay mechanism"""
     temps_actuel = time.time()
     if temps_actuel - jeu.get('last_decay_time', 0) > DECAY_INTERVAL:
-        cellule_occupe = [
-            (y, x) for y in range(TAILLE_GRILLE)
-            for x in range(LARGEUR_PLATEAU)
-            if jeu['grille'][y][x] is not None
+        occupied_cells = [
+            (y, x) for y in range(GRID_HEIGHT) 
+            for x in range(LARGEUR_PLATEAU) 
+            if jeu['grid'][y][x] is not None
         ]
-
-        if cellule_occupe:
-            y, x = random.choice(cellule_occupe)
-            jeu['grille'][y][x] = None
-
+        
+        if occupied_cells:
+            # Choose and remove a random block
+            y, x = random.choice(occupied_cells)
+            jeu['grid'][y][x] = None
+        
         jeu['last_decay_time'] = temps_actuel
 
 
-def charge_jeu(filename='tetris_save.json'):
-    """charge le jeu d'un fichier json"""
+
+
+def load_game(filename='tetris_save.json'):
+    """Load game state from a file with advanced mode support"""
     try:
         with open(filename, 'r') as f:
             save_data = json.load(f)
-
+        
+        # Recreate game state
         jeu = creer_etat_jeu()
-        jeu['grille'] = save_data['grille']
-        jeu['piece_courante'] = save_data['piece_courante']
-        jeu['prochaine_piece'] = save_data['prochaine_piece']
+        jeu['grid'] = save_data['grid']
+        jeu['current_piece'] = save_data['current_piece']
+        jeu['next_piece'] = save_data['next_piece']
         jeu['score'] = save_data['score']
         jeu['level'] = save_data['level']
-        jeu['ligne_netoye'] = save_data['ligne_netoye']
-
-        global GAME_MODES, POINT_AVEC_NIVEAU
+        jeu['lines_cleared'] = save_data['lines_cleared']
+        
+        # Update global configurations from saved game
+        global GAME_MODES, POINTS_WITH_LEVEL_ENABLED
         GAME_MODES['standard'] = save_data.get('game_modes', {}).get('standard', True)
         GAME_MODES['decay'] = save_data.get('game_modes', {}).get('decay', False)
-        GAME_MODES['deux_joueur'] = save_data.get('game_modes', {}).get('deux_joueur', False)
-        GAME_MODES['Polymynos_arbitraire'] = save_data.get('game_mode', {}).get('Polymynos_arbitraire', False)
-        POINT_AVEC_NIVEAU = save_data.get('points_with_level', False)
-
+        GAME_MODES['two_player'] = save_data.get('game_modes', {}).get('two_player', False)
+        GAME_MODES['Polymynos_arbitraire']=save_data.get('game_mode', {}).get('Polymynos_arbitraire', False)
+        POINTS_WITH_LEVEL_ENABLED = save_data.get('points_with_level', False)
+        
+        # Add missing attributes for game update
         jeu['dernier_tombe'] = time.time()
         jeu['vitesse_tombe'] = 1.0
-
+        
         print(f"Game loaded from {filename}")
         return jeu
     except FileNotFoundError:
@@ -116,18 +189,19 @@ def charge_jeu(filename='tetris_save.json'):
         return None
 
 
-def sauvergarde_jeu(jeu, filename='tetris_save.json'):
-    """sauvegarde le jeu dans un fichier json"""
+
+def save_game(jeu, filename='tetris_save.json'):
+    """Save game state to a file with advanced mode support"""
     try:
         save_data = {
-            'grille': jeu['grille'],
-            'piece_courante': jeu['piece_courante'],
-            'prochaine_piece': jeu['prochaine_piece'],
+            'grid': jeu['grid'],
+            'current_piece': jeu['current_piece'],
+            'next_piece': jeu['next_piece'],
             'score': jeu['score'],
             'level': jeu['level'],
-            'ligne_netoye': jeu['ligne_netoye'],
+            'lines_cleared': jeu['lines_cleared'],
             'game_modes': GAME_MODES,
-            'points_with_level': POINT_AVEC_NIVEAU,
+            'points_with_level': POINTS_WITH_LEVEL_ENABLED,
             'dernier_tombe': jeu.get('dernier_tombe', time.time()),
             'vitesse_tombe': jeu.get('vitesse_tombe', 1.0)
         }
@@ -138,57 +212,62 @@ def sauvergarde_jeu(jeu, filename='tetris_save.json'):
         print(f"Error saving game: {e}")
 
 
+
+
+
+
+
 def mode_selection_menu():
     """Menu amélioré pour la sélection du mode de jeu et des points"""
-    cree_fenetre(WINDOW_WIDTH, TAILLE_FENETRE)
-
+    cree_fenetre(WINDOW_WIDTH, WINDOW_HEIGHT)
+    
     # Liste étendue des modes pour plusieurs sélections
-    modes = ['Standard', 'Détérioration', 'Deux joueurs', 'Points avec niveaux', 'Polymynos arbitraire']
+    modes = ['Standard', 'Détérioration', 'Deux joueurs', 'Points avec niveaux', 'Polymynos arbitraire','Couleur adjacente','Bonus']
     selected_modes = [False] * len(modes)
     current_selection = 0
-
+    
     while True:
         efface_tout()
-
+        
         # Titre
         texte(WINDOW_WIDTH // 2 - 250, 50, "CONFIGURATION DU JEU TETRIS", "red")
-
+        
         # Sélection du mode
         for i, mode in enumerate(modes):
             # Mettre en surbrillance la sélection actuelle
             if i == current_selection:
-                rectangle(WINDOW_WIDTH // 2 - 180, 150 + i * 70,
+                rectangle(WINDOW_WIDTH // 2 - 180, 150 + i * 70, 
                           WINDOW_WIDTH // 2 + 180, 200 + i * 70, "white")
-
+            
             # Couleur selon l'état de sélection
             if i < 3:  # Modes de jeu
                 couleur = "green" if selected_modes[i] else "gray"
             else:  # Points avec niveaux
                 couleur = "green" if selected_modes[i] else "gray"
-
-            rectangle(WINDOW_WIDTH // 2 - 150, 150 + i * 70,
+            
+            rectangle(WINDOW_WIDTH // 2 - 150, 150 + i * 70, 
                       WINDOW_WIDTH // 2 + 150, 200 + i * 70, couleur)
             texte(WINDOW_WIDTH // 2 - 100, 165 + i * 70, mode, couleur)
-
+        
         # Instructions
-        texte(WINDOW_WIDTH // 2 - 250, TAILLE_FENETRE - 150,
+        texte(WINDOW_WIDTH // 2 - 250, WINDOW_HEIGHT - 150, 
               "HAUT/BAS pour naviguer", "blue")
-        texte(WINDOW_WIDTH // 2 - 250, TAILLE_FENETRE - 120,
+        texte(WINDOW_WIDTH // 2 - 250, WINDOW_HEIGHT - 120, 
               "ESPACE pour sélectionner/décocher", "blue")
-        texte(WINDOW_WIDTH // 2 - 250, TAILLE_FENETRE - 90,
+        texte(WINDOW_WIDTH // 2 - 250, WINDOW_HEIGHT - 90, 
               "ENTRÉE pour confirmer", "blue")
-        texte(WINDOW_WIDTH // 2 - 250, TAILLE_FENETRE - 60,
+        texte(WINDOW_WIDTH // 2 - 250, WINDOW_HEIGHT - 60, 
               "Appuyez sur L pour charger une partie", "blue")
-
+        
         mise_a_jour()
-
+        
         # Gestion des événements
         ev = attend_ev()
         type_evt = type_ev(ev)
-
+        
         if type_evt == 'Touche':
             touche_pressee = touche(ev)
-
+            
             if touche_pressee == 'Up':
                 current_selection = (current_selection - 1) % len(modes)
             elif touche_pressee == 'Down':
@@ -198,35 +277,38 @@ def mode_selection_menu():
                 selected_modes[current_selection] = not selected_modes[current_selection]
             elif touche_pressee == 'Return':
                 # Mettre à jour les modes de jeu globaux
-                global GAME_MODES, POINT_AVEC_NIVEAU
+                global GAME_MODES, POINTS_WITH_LEVEL_ENABLED
                 GAME_MODES['standard'] = selected_modes[0]
                 GAME_MODES['decay'] = selected_modes[1]
-                GAME_MODES['deux_joueur'] = selected_modes[2]
+                GAME_MODES['two_player'] = selected_modes[2]
                 GAME_MODES['Polymynos_arbitraire'] = selected_modes[4]
-                POINT_AVEC_NIVEAU = selected_modes[3]
-
+                GAME_MODES['Couleur_adjacente'] = selected_modes[5]
+                GAME_MODES['Bonus'] = selected_modes[6]
+                POINTS_WITH_LEVEL_ENABLED = selected_modes[3]
+                
                 ferme_fenetre()
                 return None
             elif touche_pressee == 'l':
                 # Option pour charger une partie
-                loaded_game = charge_jeu()
+                loaded_game = load_game()
                 if loaded_game:
                     ferme_fenetre()
                     return loaded_game
+    
     return None
 
 
-# Devra etre modifie pour les Bonus
+#Devra etre modifie pour les Bonus
 def creer_grille():
     """Crée une grille vide pour le jeu."""
     grille = []
-    for _ in range(TAILLE_GRILLE):
+    for _ in range(GRID_HEIGHT):
         ligne = []
         for _ in range(LARGEUR_PLATEAU):
             ligne.append(None)
         grille.append(ligne)
+    
     return grille
-
 
 def piece_en_collision(jeu, piece):
     """Vérifie si la pièce donnée entre en collision avec la grille."""
@@ -240,13 +322,12 @@ def piece_en_collision(jeu, piece):
                 # Calcul de la position dans la grille
                 grille_x = piece['x'] + rel_x
                 grille_y = piece['y'] + rel_y
-                # Vérifie les limites de la grille ou une collision avec une cellule occupée
-                if grille_x < 0 or grille_x >= LARGEUR_PLATEAU or grille_y >= TAILLE_GRILLE:
+                
+                if grille_x < 0 or grille_x >= LARGEUR_PLATEAU or grille_y >= GRID_HEIGHT:
                     return True
-                if grille_y >= 0 and jeu['grille'][grille_y][grille_x] is not None:
+                if grille_y >= 0 and jeu['grid'][grille_y][grille_x] is not None:
                     return True
     return False
-
 
 def nouvelle_forme_rotatee(piece):
     """Renvoie une nouvelle forme de la pièce, tournée de 90 degrés dans le sens horaire."""
@@ -269,7 +350,7 @@ def nouvelle_forme_rotatee(piece):
 
 def appliquer_rotation_si_possible(jeu):
     """Déplace la pièce courante de dx et dy, fusionne si une collision empêche le déplacement."""
-    piece = jeu['piece_courante']
+    piece = jeu['current_piece']
     ancienne_forme = piece['forme']
     piece['forme'] = nouvelle_forme_rotatee(piece)
     if piece_en_collision(jeu, piece):
@@ -278,7 +359,7 @@ def appliquer_rotation_si_possible(jeu):
 
 def appliquer_deplacement(jeu, dx, dy):
     """Déplace la pièce courante de dx et dy, fusionne si une collision empêche le déplacement."""
-    piece = jeu['piece_courante']
+    piece = jeu['current_piece']
     piece['x'] += dx
     piece['y'] += dy
     if piece_en_collision(jeu, piece):
@@ -291,56 +372,153 @@ def appliquer_deplacement(jeu, dx, dy):
         return False
     return True
 
+def sont_voisins(b1, b2):
+    """Vérifie si deux blocs b1 et b2 sont voisins (touchent horizontalement ou verticalement)."""
+    return abs(b1[0] - b2[0]) == 1 and b1[1] == b2[1] or abs(b1[1] - b2[1]) == 1 and b1[0] == b2[0]
+
+
+def remplacer_blocs_par_none(grille, pieces, tetromino_history, couleur,jeu):
+    """Remplace les blocs des pièces par None dans la grille et les supprime de Tetromino_history."""
+    for piece in pieces:
+        for bloc in piece:
+            y, x = bloc
+            grille[y][x] = None
+
+        # Une fois tous les blocs de la pièce remplacés, on supprime la pièce de Tetromino_history
+        if couleur in tetromino_history:
+            if piece in tetromino_history[couleur]:
+                tetromino_history[couleur].remove(piece)
+                jeu["score"]+=10
+    
+    # Si après la suppression il n'y a plus de pièces pour une couleur, on enlève cette couleur de Tetromino_history
+    if couleur in tetromino_history and not tetromino_history[couleur]:
+        tetromino_history[couleur]=[]
+
+
+def verifier_et_remplacer(grille, tetromino_history, couleur,jeu):
+    """
+    Vérifie si deux pièces de la même couleur se touchent par au moins deux blocs et
+    remplace leurs blocs par None dans la grille.
+    """
+    # Récupère toutes les positions des blocs pour la couleur donnée
+    pieces = tetromino_history.get(couleur, [])
+
+    # Si moins de 2 pièces, aucune possibilité de se toucher
+    if len(pieces) < 2:
+        return False
+
+    # Compare chaque bloc de la première pièce avec chaque bloc de la deuxième pièce
+    for i in range(len(pieces)):
+        for j in range(i + 1, len(pieces)):  # Comparer chaque paire de pièces
+            piece1 = pieces[i]
+            piece2 = pieces[j]
+            
+            # Vérifier si au moins deux blocs de piece1 se touchent avec au moins deux blocs de piece2
+            count = 0
+            for b1 in piece1:
+                for b2 in piece2:
+                    if sont_voisins(b1, b2):
+                        count += 1
+                    if count >= 2:  # Si on a trouvé deux blocs voisins, on remplace les blocs par None
+                        # Remplacer les blocs des deux pièces par None dans la grille
+                        remplacer_blocs_par_none(grille, [piece1, piece2],tetromino_history,couleur,jeu)
+                        return True
+
+    return False
+
+
 
 def verifier_lignes(jeu):
-    """Modified to support multiple game modes"""
-    # Initialise un compteur pour les lignes complètes
+    """Vérifie les lignes complètes, les supprime, met à jour Tetromino_history et décale les blocs."""
+    global Tetromino_history,BLOC_BONUS,temp_depuis_bonus
     lignes_vides = 0
+    lignes_supprimees = []  # Liste pour stocker les numéros des lignes supprimées
 
-    # Parcourt chaque ligne de la grille
-    for y in range(TAILLE_GRILLE):
+    # Parcourt chaque ligne de la grille (de bas en haut pour éviter les décalages)
+    for y in range(GRID_HEIGHT - 1, -1, -1):  # Commence par la dernière ligne
         ligne_complete = True
         for x in range(LARGEUR_PLATEAU):
-            if jeu['grille'][y][x] is None:
+            if jeu['grid'][y][x] is None:
                 ligne_complete = False
                 break
 
         if ligne_complete:
-            jeu['grille'].pop(y)
-
+            # Supprime la ligne complète
+            jeu['grid'].pop(y)
             ligne_vide = [None] * LARGEUR_PLATEAU
-            jeu['grille'].insert(0, ligne_vide)
-
+            jeu['grid'].insert(0, ligne_vide)
             lignes_vides += 1
+            lignes_supprimees.append(y)  # Garde le numéro de la ligne supprimée
 
+    
     # Met à jour le score et le niveau en fonction des lignes effacées
     mise_a_jour_score_et_niveau(jeu, lignes_vides)
+    if GAME_MODES['Couleur_adjacente']:
+    # **Itérer sur une copie des clés pour éviter les modifications en cours d'itération**
+        for couleur in list(Tetromino_history.keys()):  # Crée une copie des clés du dictionnaire
+            verifier_et_remplacer(jeu['grid'], Tetromino_history, couleur,jeu)
 
-    # Advanced game modes
     if GAME_MODES['decay']:
         mode_decay(jeu)
 
+    if GAME_MODES['Couleur_adjacente']:
+        for couleur, blocs in Tetromino_history.items():
+            nouvelles_pieces = []  # Pour stocker les pièces mises à jour
+            for piece in blocs:
+                nouvelle_piece = []
+                for bloc in piece:
+                    y, x = bloc  # Coordonnées du bloc
+                    if y in lignes_supprimees:
+                    # Le bloc appartient à une ligne supprimée, on l'ignore (il est supprimé)
+                        continue
+                    # Décale les blocs situés au-dessus des lignes supprimées
+                    decalage = sum(1 for ligne in lignes_supprimees if y < ligne)  # Compte les lignes en dessous
+                    nouvelle_piece.append([y + decalage, x])
+            # Ajoute la pièce mise à jour si elle contient encore des blocs
+                if nouvelle_piece:
+                    nouvelles_pieces.append(nouvelle_piece)
+            Tetromino_history[couleur] = nouvelles_pieces
+    if GAME_MODES['Bonus']:
+        a=random.randint(0,5)
+        b=random.randint(0,5)
+        if a==b:
+            piece_aleatoire_bonus(jeu)
+        for y in lignes_supprimees:
+            if y in BLOC_BONUS:
+                BLOC_BONUS.remove(y)
+                appliquer_bonus(jeu)
+                temp_depuis_bonus=time.time()
+        Desactiver_bonus(jeu)
 
 def fusionner_piece(jeu):
     """Ajoute la pièce courante à la grille, en fonction de sa position et de sa couleur."""
-    piece = jeu['piece_courante']
+    piece = jeu['current_piece']
     forme = piece['forme']
     couleur = piece['couleur']
     hauteur = len(forme)
     largeur = len(forme[0])
+    
+    # Liste pour stocker les coordonnées de cette pièce
+    piece_coords = []
 
     for rel_y in range(hauteur):
         for rel_x in range(largeur):
             if forme[rel_y][rel_x]:
                 grille_y, grille_x = piece['y'] + rel_y, piece['x'] + rel_x
-                POLYMINO.append([grille_y, grille_x])  # Sauvegarde de la piece occupe(pour les prochaines variantes)
+                POLYMINO.append([grille_y, grille_x])  # Pour la compatibilité existante
                 if grille_y >= 0:  # Ne pas dessiner en dehors de la grille
-                    jeu['grille'][grille_y][grille_x] = couleur
+                    jeu['grid'][grille_y][grille_x] = couleur
+                    piece_coords.append([grille_y, grille_x])
+    
+    global Tetromino_history
+    Tetromino_history[couleur].append(piece_coords)
+
+
 
 
 def mise_a_jour_score_et_niveau(jeu, lignes_vides):
     """Met à jour le score et le niveau en fonction des lignes complètes."""
-    jeu['ligne_netoye'] += lignes_vides
+    jeu['lines_cleared'] += lignes_vides
     point = 0
     if lignes_vides == 1:
         point += 40
@@ -352,59 +530,63 @@ def mise_a_jour_score_et_niveau(jeu, lignes_vides):
         point += 500
     else:
         point += 0
-
-    # Apply level multiplier only if POINT_AVEC_NIVEAU is True
-    if POINT_AVEC_NIVEAU:
+    
+    # Apply level multiplier only if POINTS_WITH_LEVEL_ENABLED is True
+    if POINTS_WITH_LEVEL_ENABLED:
         point *= jeu['level']
-
+    point*=Multiplicateur
     jeu['score'] += point
-    jeu['level'] = jeu['ligne_netoye'] // 5 + 1
-
+    jeu['level'] = jeu['lines_cleared'] // 5 + 1
 
 def nouvelle_piece(jeu):
     """Génère une nouvelle pièce et la positionne en haut de la grille, termine le jeu si collision."""
-    if jeu['prochaine_piece'] is None:
-        jeu['prochaine_piece'] = creer_piece()  # Crée la première pièce suivante
-
-    jeu['piece_courante'] = jeu['prochaine_piece']  # Utilise la pièce suivante comme pièce courante
-    jeu['prochaine_piece'] = creer_piece()  # Crée une nouvelle pièce suivante
-
-    if piece_en_collision(jeu, jeu['piece_courante']):
+    if jeu['next_piece'] is None:
+        jeu['next_piece'] = creer_piece()  # Crée la première pièce suivante
+    
+    jeu['current_piece'] = jeu['next_piece']  # Utilise la pièce suivante comme pièce courante
+    jeu['next_piece'] = creer_piece()  # Crée une nouvelle pièce suivante
+    
+    if piece_en_collision(jeu, jeu['current_piece']):
         jeu['game_over'] = True
 
 
 def dessiner_prochaine_piece(jeu):
     """Dessine la prochaine pièce dans une zone à droite du plateau."""
-    if jeu['prochaine_piece']:
+    if jeu['next_piece']:
         # Position de la zone d'aperçu
-        preview_x = LARGEUR_PLATEAU * TAILLE_BLOC + 25
+        preview_x = LARGEUR_PLATEAU * BLOC_SIZE +25
         preview_y = 200
-
+        
+        
         texte(preview_x - 20, preview_y - 30, "Prochaine", "black")
-
-        piece = jeu['prochaine_piece']
+        
+        piece = jeu['next_piece']
         forme = piece['forme']
         couleur = piece['couleur']
-
+        
         # Centre la pièce dans la zone d'aperçu
         centre_x = preview_x + 30
         centre_y = preview_y + 30
 
+
         for y in range(len(forme)):
             for x in range(len(forme[0])):
                 if forme[y][x]:
-                    rectangle(centre_x + x * TAILLE_BLOC,
-                              centre_y + y * TAILLE_BLOC,
-                              centre_x + (x + 1) * TAILLE_BLOC,
-                              centre_y + (y + 1) * TAILLE_BLOC,
-                              couleur, couleur)
+                    rectangle(centre_x + x * BLOC_SIZE,
+                            centre_y + y * BLOC_SIZE,
+                            centre_x + (x + 1) * BLOC_SIZE,
+                            centre_y + (y + 1) * BLOC_SIZE,
+                            couleur, couleur)
+
+
+
 
 
 def creer_piece():
     """Crée une nouvelle pièce au hasard avec une forme et couleur aléatoires."""
     # Sélectionne un index aléatoire pour déterminer la forme et la couleur de la pièce
     index = random.randint(0, len(Tetrominos) - 1)
-
+    
     # Initialise une nouvelle liste pour la forme et copie chaque élément sans slicing ni compréhension de liste
     forme = []
     for row in Tetrominos[index]:
@@ -413,7 +595,7 @@ def creer_piece():
         for element in row:
             copie_row.append(element)
         forme.append(copie_row)
-
+    
     # Crée le dictionnaire de la pièce avec la forme, couleur, et position de départ
     return {
         'forme': forme,
@@ -422,47 +604,43 @@ def creer_piece():
         'y': 0
     }
 
-
 def creer_etat_jeu():
     """Initialise l'état de jeu avec une grille vide et les valeurs de départ."""
 
     return {
-        'grille': creer_grille(),
-        'piece_courante': None,
-        'prochaine_piece': None,
+        'grid': creer_grille(),
+        'current_piece': None,
+        'next_piece': None,  
         'game_over': False,
         'score': 0,
         'level': 1,
-        'ligne_netoye': 0
+        'lines_cleared': 0
     }
-
 
 def dessiner_grille():
     """Dessine la grille de jeu avec les lignes verticales et horizontales."""
     # Dessiner les lignes verticales
     for x in range(LARGEUR_PLATEAU + 1):
-        ligne(x * TAILLE_BLOC, 0, x * TAILLE_BLOC, TAILLE_GRILLE * TAILLE_BLOC, "white")
+        ligne(x * BLOC_SIZE, 0, x * BLOC_SIZE, GRID_HEIGHT * BLOC_SIZE, "white")
 
     # Dessiner les lignes horizontales
-    for y in range(TAILLE_GRILLE + 1):
-        ligne(0, y * TAILLE_BLOC, LARGEUR_PLATEAU * TAILLE_BLOC, y * TAILLE_BLOC, "white")
-
+    for y in range(GRID_HEIGHT + 1):
+        ligne(0, y * BLOC_SIZE, LARGEUR_PLATEAU * BLOC_SIZE, y * BLOC_SIZE, "white")
 
 def dessiner_contenu_grille(jeu):
     """Dessine le contenu actuel de la grille."""
-    for y in range(TAILLE_GRILLE):
+    for y in range(GRID_HEIGHT):
         for x in range(LARGEUR_PLATEAU):
-            color = jeu['grille'][y][x]
+            color = jeu['grid'][y][x]
             if color:
-                rectangle(x * TAILLE_BLOC, y * TAILLE_BLOC,
-                          (x + 1) * TAILLE_BLOC, (y + 1) * TAILLE_BLOC,
+                rectangle(x * BLOC_SIZE, y * BLOC_SIZE,
+                          (x + 1) * BLOC_SIZE, (y + 1) * BLOC_SIZE,
                           color, color)
-
 
 def dessiner_piece_courante(jeu):
     """Dessine la pièce courante sur la grille."""
-    if jeu['piece_courante']:
-        piece = jeu['piece_courante']
+    if jeu['current_piece']:
+        piece = jeu['current_piece']
         forme = piece['forme']
         couleur = piece['couleur']
         hauteur = len(forme)
@@ -474,47 +652,43 @@ def dessiner_piece_courante(jeu):
                     abs_x = piece['x'] + x
                     abs_y = piece['y'] + y
                     if abs_y >= 0:  # Si la pièce est dans le plateau, on la dessine
-                        rectangle(abs_x * TAILLE_BLOC, abs_y * TAILLE_BLOC,
-                                  (abs_x + 1) * TAILLE_BLOC, (abs_y + 1) * TAILLE_BLOC,
+                        rectangle(abs_x * BLOC_SIZE, abs_y * BLOC_SIZE,
+                                  (abs_x + 1) * BLOC_SIZE, (abs_y + 1) * BLOC_SIZE,
                                   couleur, couleur)
-
 
 def dessiner_scores(jeu):
     """Dessine le score, le niveau et le nombre de lignes effacées."""
-    texte(LARGEUR_PLATEAU * TAILLE_BLOC + 20, 50, "Score: " + str(jeu['score']), "black")
-    texte(LARGEUR_PLATEAU * TAILLE_BLOC + 20, 80, "Niveau: " + str(jeu['level']), "black")
-    texte(LARGEUR_PLATEAU * TAILLE_BLOC + 20, 110, "Lignes: " + str(jeu['ligne_netoye']), "black")
+    texte(LARGEUR_PLATEAU * BLOC_SIZE + 20, 50, "Score: " + str(jeu['score']), "black")
+    texte(LARGEUR_PLATEAU * BLOC_SIZE + 20, 80, "Niveau: " + str(jeu['level']), "black")
+    texte(LARGEUR_PLATEAU * BLOC_SIZE + 20, 110, "Lignes: " + str(jeu['lines_cleared']), "black")
     if jeu['game_over']:
-        texte(LARGEUR_PLATEAU * TAILLE_BLOC // 2 - 40, TAILLE_GRILLE * TAILLE_BLOC // 2, "GAME OVER", "red")
-
+        texte(LARGEUR_PLATEAU * BLOC_SIZE // 2 - 40, GRID_HEIGHT * BLOC_SIZE // 2, "GAME OVER", "red")
 
 def dessiner_jeu(jeu):
     """Dessine l'état actuel du jeu."""
     efface_tout()
-    rectangle(0, 0, LARGEUR_PLATEAU * TAILLE_BLOC, TAILLE_GRILLE * TAILLE_BLOC, "black", "black")
+    rectangle(0, 0, LARGEUR_PLATEAU * BLOC_SIZE, GRID_HEIGHT * BLOC_SIZE, "black", "black")
     dessiner_grille()  # Dessine la grille
     dessiner_contenu_grille(jeu)  # Dessine le contenu de la grille
     dessiner_piece_courante(jeu)  # Dessine la pièce courante
     dessiner_scores(jeu)  # Dessine le score et le niveau
     dessiner_prochaine_piece(jeu)  # Dessine la prochaine pièce
-    if GAME_MODES['decay'] == True:
+    if GAME_MODES['decay']==True:
         mode_decay(jeu)
     mise_a_jour()  # Met à jour l'affichage
 
 
+
+
+
 def pause(jeu):
     """Met le jeu en pause jusqu'à ce que le joueur appuie à nouveau sur 'p'"""
-    global GAME_MODES
     while True:  # Boucle d'attente
         efface_tout()
-        if GAME_MODES['deux_joueur']:
-            dessiner_jeu_deux_joueurs(jeu)
-            texte(LARGEUR_PLATEAU * TAILLE_BLOC - 40, TAILLE_GRILLE * TAILLE_BLOC // 2, "PAUSE", "white")
-        else:
-            dessiner_jeu(jeu)  # Garde l'affichage du jeu
-            texte(LARGEUR_PLATEAU * TAILLE_BLOC // 2 - 40, TAILLE_GRILLE * TAILLE_BLOC // 2, "PAUSE", "white")
+        dessiner_jeu(jeu)  # Garde l'affichage du jeu
+        texte(LARGEUR_PLATEAU * BLOC_SIZE // 2 - 40, GRID_HEIGHT * BLOC_SIZE // 2, "PAUSE", "white")
         mise_a_jour()  # Met à jour l'affichage
-
+        
         ev = donne_ev()
         if ev:
             type_evt = type_ev(ev)
@@ -522,27 +696,22 @@ def pause(jeu):
                 touche_pressee = touche(ev)
                 if touche_pressee == 'p':  # Si 'p' est pressé, sort de la pause
                     return
-                elif touche_pressee=='s':
-                    sauvergarde_jeu(jeu,filename="tetris_save.json")
-                elif touche_pressee=='l':
-                    charge_jeu('tetris_save.json')
+    
 
 
 def initialiser_fenetre():
     """Initialise la fenêtre du jeu."""
-    cree_fenetre(WINDOW_WIDTH, TAILLE_FENETRE)
-
+    cree_fenetre(WINDOW_WIDTH, WINDOW_HEIGHT)
 
 def initialiser_jeu():
     """Initialise l'état du jeu avec les options choisies."""
     jeu = creer_etat_jeu()
-    jeu['points_with_level'] = POINT_AVEC_NIVEAU
-    jeu['prochaine_piece'] = creer_piece()
+    jeu['points_with_level'] = POINTS_WITH_LEVEL_ENABLED
+    jeu['next_piece'] = creer_piece()
     nouvelle_piece(jeu)
     jeu['dernier_tombe'] = time.time()
     jeu['vitesse_tombe'] = 1.0
     return jeu
-
 
 def gerer_entrees_utilisateur(jeu):
     """Gère les entrées utilisateur."""
@@ -551,7 +720,6 @@ def gerer_entrees_utilisateur(jeu):
         type_evt = type_ev(ev)
         if type_evt == 'Touche':
             traiter_touche(touche(ev), jeu)
-
 
 def traiter_touche(touche_pressee, jeu):
     """Ajout de nouvelles touches pour les fonctionnalités avancées"""
@@ -568,10 +736,10 @@ def traiter_touche(touche_pressee, jeu):
         appliquer_rotation_si_possible(jeu)
     elif touche_pressee == 'space':
         faire_tomber_piece(jeu)
-
+    
     # Nouvelles touches
     elif touche_pressee == 's':  # Sauvegarder
-        sauvergarde_jeu(jeu)
+        save_game(jeu)
     elif touche_pressee == 'p':  # Pause
         pause(jeu)
     elif touche_pressee == 'm':  # Retour au menu
@@ -579,30 +747,28 @@ def traiter_touche(touche_pressee, jeu):
         main()
 
 
+
 def faire_tomber_piece(jeu):
     """Fait tomber la pièce directement."""
     while appliquer_deplacement(jeu, 0, 1):
         pass
 
-
 def mettre_a_jour_jeu(jeu):
     """Met à jour l'état du jeu pour faire descendre les pièces."""
     temps_actuel = time.time()
-    if temps_actuel - jeu['dernier_tombe'] > jeu['vitesse_tombe'] / jeu['level']:  # regarde le niveau
+    if temps_actuel - jeu['dernier_tombe'] > jeu['vitesse_tombe'] / jeu['level']:#regarde le niveau
         appliquer_deplacement(jeu, 0, 1)
         jeu['dernier_tombe'] = temps_actuel
-
 
 def attendre_fin():
     """Attendre que le joueur clique pour quitter."""
     attend_clic_gauche()
     ferme_fenetre()
 
-
 def charger_Poly():
     # Remplacement si le fichier contient des polyominos
     global Tetrominos
-    nom_fichier_polyominos = ""
+    nom_fichier_polyominos = "polyominos.txt"
     nouveaux_polyominos = lire_polyominos_et_remplacer(nom_fichier_polyominos)
 
     if nouveaux_polyominos:
@@ -616,32 +782,32 @@ def charger_Poly():
         print()
 
 
-# ====================================================================================
-# code pour le mode deux joueur
+#====================================================================================
+#code pour le mode deux joueur
 
 
 def creer_etat_jeu_deux_joueurs():
     """Initialise l'état de jeu pour deux joueurs."""
     return {
         'player1': {
-            'grille': creer_grille(),
-            'piece_courante': None,
-            'prochaine_piece': None,
+            'grid': creer_grille(),
+            'current_piece': None,
+            'next_piece': None,  
             'game_over': False,
             'score': 0,
             'level': 1,
-            'ligne_netoye': 0,
+            'lines_cleared': 0,
             'dernier_tombe': time.time(),
             'vitesse_tombe': 1.0
         },
         'player2': {
-            'grille': creer_grille(),
-            'piece_courante': None,
-            'prochaine_piece': None,
+            'grid': creer_grille(),
+            'current_piece': None,
+            'next_piece': None,  
             'game_over': False,
             'score': 0,
             'level': 1,
-            'ligne_netoye': 0,
+            'lines_cleared': 0,
             'dernier_tombe': time.time(),
             'vitesse_tombe': 1.0
         },
@@ -652,53 +818,53 @@ def creer_etat_jeu_deux_joueurs():
 def dessiner_jeu_deux_joueurs(jeu):
     """Dessine l'état du jeu pour deux joueurs."""
     efface_tout()
-
+    
     # Dessiner la grille du joueur 1
-    rectangle(0, 0, LARGEUR_PLATEAU * TAILLE_BLOC, TAILLE_GRILLE * TAILLE_BLOC, "black", "black")
+    rectangle(0, 0, LARGEUR_PLATEAU * BLOC_SIZE, GRID_HEIGHT * BLOC_SIZE, "black", "black")
     dessiner_grille_specifique(0)
     dessiner_contenu_grille_specifique(jeu, 'player1', 0)
     dessiner_piece_courante_specifique(jeu, 'player1', 0)
-    dessiner_scores_specifique(jeu, 'player1', (LARGEUR_PLATEAU * TAILLE_BLOC))
-    dessiner_prochaine_piece_specifique(jeu, 'player1', LARGEUR_PLATEAU * TAILLE_BLOC)
-
+    dessiner_scores_specifique(jeu, 'player1', (LARGEUR_PLATEAU * BLOC_SIZE))
+    dessiner_prochaine_piece_specifique(jeu, 'player1', LARGEUR_PLATEAU * BLOC_SIZE)
+    
     # Dessiner la grille du joueur 2
-    rectangle(LARGEUR_PLATEAU * TAILLE_BLOC, 0,
-              2 * LARGEUR_PLATEAU * TAILLE_BLOC, TAILLE_GRILLE * TAILLE_BLOC, "black", "black")
-    dessiner_grille_specifique(LARGEUR_PLATEAU * TAILLE_BLOC)
-    dessiner_contenu_grille_specifique(jeu, 'player2', LARGEUR_PLATEAU * TAILLE_BLOC)
-    dessiner_piece_courante_specifique(jeu, 'player2', LARGEUR_PLATEAU * TAILLE_BLOC)
-    dessiner_scores_specifique(jeu, 'player2', LARGEUR_PLATEAU * TAILLE_BLOC)
-    dessiner_prochaine_piece_specifique(jeu, 'player2', LARGEUR_PLATEAU * TAILLE_BLOC)
+    rectangle(LARGEUR_PLATEAU * BLOC_SIZE, 0, 
+              2 * LARGEUR_PLATEAU * BLOC_SIZE, GRID_HEIGHT * BLOC_SIZE, "black", "black")
+    dessiner_grille_specifique(LARGEUR_PLATEAU * BLOC_SIZE)
+    dessiner_contenu_grille_specifique(jeu, 'player2', LARGEUR_PLATEAU * BLOC_SIZE)
+    dessiner_piece_courante_specifique(jeu, 'player2', LARGEUR_PLATEAU * BLOC_SIZE)
+    dessiner_scores_specifique(jeu, 'player2', LARGEUR_PLATEAU * BLOC_SIZE)
+    dessiner_prochaine_piece_specifique(jeu, 'player2', LARGEUR_PLATEAU * BLOC_SIZE)
+    
     mise_a_jour()
-
 
 def dessiner_grille_specifique(offset_x):
     """Dessine les lignes de la grille pour un joueur spécifique."""
     for x in range(LARGEUR_PLATEAU + 1):
-        ligne(offset_x + x * TAILLE_BLOC, 0,
-              offset_x + x * TAILLE_BLOC, TAILLE_GRILLE * TAILLE_BLOC, "white")
-        if x == (LARGEUR_PLATEAU):
-            ligne(x * TAILLE_BLOC, 0, x * TAILLE_BLOC, TAILLE_GRILLE * TAILLE_BLOC, "red")
-    for y in range(TAILLE_GRILLE + 1):
-        ligne(offset_x, y * TAILLE_BLOC,
-              offset_x + LARGEUR_PLATEAU * TAILLE_BLOC, y * TAILLE_BLOC, "white")
+        ligne(offset_x + x * BLOC_SIZE, 0, 
+              offset_x + x * BLOC_SIZE, GRID_HEIGHT * BLOC_SIZE, "white")
+        if x==(LARGEUR_PLATEAU):
+            ligne(x * BLOC_SIZE, 0, x * BLOC_SIZE, GRID_HEIGHT * BLOC_SIZE, "red")
+    for y in range(GRID_HEIGHT + 1):
+        ligne(offset_x, y * BLOC_SIZE, 
+              offset_x + LARGEUR_PLATEAU * BLOC_SIZE, y * BLOC_SIZE, "white")
 
 
 def dessiner_contenu_grille_specifique(jeu, joueur, offset_x):
     """Dessine le contenu de la grille pour un joueur spécifique."""
-    for y in range(TAILLE_GRILLE):
+    for y in range(GRID_HEIGHT):
         for x in range(LARGEUR_PLATEAU):
-            color = jeu[joueur]['grille'][y][x]
+            color = jeu[joueur]['grid'][y][x]
             if color:
-                rectangle(offset_x + x * TAILLE_BLOC, y * TAILLE_BLOC,
-                          offset_x + (x + 1) * TAILLE_BLOC, (y + 1) * TAILLE_BLOC,
+                rectangle(offset_x + x * BLOC_SIZE, y * BLOC_SIZE,
+                          offset_x + (x + 1) * BLOC_SIZE, (y + 1) * BLOC_SIZE,
                           color, color)
 
 
 def dessiner_piece_courante_specifique(jeu, joueur, offset_x):
     """Dessine la pièce courante pour un joueur spécifique."""
-    if jeu[joueur]['piece_courante']:
-        piece = jeu[joueur]['piece_courante']
+    if jeu[joueur]['current_piece']:
+        piece = jeu[joueur]['current_piece']
         forme = piece['forme']
         couleur = piece['couleur']
         hauteur = len(forme)
@@ -710,108 +876,109 @@ def dessiner_piece_courante_specifique(jeu, joueur, offset_x):
                     abs_x = piece['x'] + x
                     abs_y = piece['y'] + y
                     if abs_y >= 0:
-                        rectangle(offset_x + abs_x * TAILLE_BLOC, abs_y * TAILLE_BLOC,
-                                  offset_x + (abs_x + 1) * TAILLE_BLOC, (abs_y + 1) * TAILLE_BLOC,
+                        rectangle(offset_x + abs_x * BLOC_SIZE, abs_y * BLOC_SIZE,
+                                  offset_x + (abs_x + 1) * BLOC_SIZE, (abs_y + 1) * BLOC_SIZE,
                                   couleur, couleur)
-
 
 def dessiner_scores_specifique(jeu, joueur, offset_x):
     """Dessine les scores pour un joueur spécifique."""
-    base_y = 50
-    if joueur == "player1":
-        base_y = 400
-    texte(offset_x + LARGEUR_PLATEAU * TAILLE_BLOC + 20, base_y,
+    base_y=50
+    if joueur=="player1":
+        base_y=400
+    texte(offset_x + LARGEUR_PLATEAU * BLOC_SIZE + 20, base_y, 
           f"{joueur.capitalize()} Score: " + str(jeu[joueur]['score']), "black")
-    texte(offset_x + LARGEUR_PLATEAU * TAILLE_BLOC + 20, base_y + 30,
+    texte(offset_x + LARGEUR_PLATEAU * BLOC_SIZE + 20, base_y+30, 
           f"{joueur.capitalize()} Niveau: " + str(jeu[joueur]['level']), "black")
-    texte(offset_x + LARGEUR_PLATEAU * TAILLE_BLOC + 20, base_y + 60,
-          f"{joueur.capitalize()} Lignes: " + str(jeu[joueur]['ligne_netoye']), "black")
-
+    texte(offset_x + LARGEUR_PLATEAU * BLOC_SIZE + 20, base_y+60, 
+          f"{joueur.capitalize()} Lignes: " + str(jeu[joueur]['lines_cleared']), "black")
+    
     if jeu[joueur]['game_over']:
-        if joueur == 'player1':
-            texte(100, TAILLE_GRILLE * TAILLE_BLOC // 2, "GAME OVER", "red")
+        if joueur=='player1':
+            texte(100,GRID_HEIGHT * BLOC_SIZE // 2,"GAME OVER","red")
         else:
-            texte(offset_x + LARGEUR_PLATEAU * TAILLE_BLOC // 2 - 40,
-                  TAILLE_GRILLE * TAILLE_BLOC // 2, "GAME OVER", "red")
+            texte(offset_x + LARGEUR_PLATEAU * BLOC_SIZE // 2 - 40, 
+                  GRID_HEIGHT * BLOC_SIZE // 2, "GAME OVER", "red")
 
 
 def dessiner_prochaine_piece_specifique(jeu, joueur, offset_x):
     """Dessine la prochaine pièce pour un joueur spécifique."""
-    if jeu[joueur]['prochaine_piece']:
-        preview_x = offset_x + LARGEUR_PLATEAU * TAILLE_BLOC + 25
-        preview_y = 200
-        if joueur == "player1":
-            preview_y = 550
-
+    if jeu[joueur]['next_piece']:
+        preview_x = offset_x + LARGEUR_PLATEAU * BLOC_SIZE + 25
+        preview_y=200
+        if joueur=="player1":
+            preview_y=550
+        
         texte(preview_x - 20, preview_y - 30, f"Prochaine {joueur.capitalize()}", "black")
-
-        piece = jeu[joueur]['prochaine_piece']
+        
+        piece = jeu[joueur]['next_piece']
         forme = piece['forme']
         couleur = piece['couleur']
-
+        
         centre_x = preview_x + 30
         centre_y = preview_y + 30
 
         for y in range(len(forme)):
             for x in range(len(forme[0])):
                 if forme[y][x]:
-                    rectangle(centre_x + x * TAILLE_BLOC,
-                              centre_y + y * TAILLE_BLOC,
-                              centre_x + (x + 1) * TAILLE_BLOC,
-                              centre_y + (y + 1) * TAILLE_BLOC,
+                    rectangle(centre_x + x * BLOC_SIZE,
+                              centre_y + y * BLOC_SIZE,
+                              centre_x + (x + 1) * BLOC_SIZE,
+                              centre_y + (y + 1) * BLOC_SIZE,
                               couleur, couleur)
 
 
-def appliquer_deplacement_deux(jeu, dx, dy, joueur):
+
+def appliquer_deplacement_deux(jeu, dx, dy,joueur):
     """Déplace la pièce courante de dx et dy, fusionne si une collision empêche le déplacement."""
-    piece = jeu[joueur]['piece_courante']
+    piece = jeu[joueur]['current_piece']
     piece['x'] += dx
     piece['y'] += dy
     if piece_en_collision(jeu[joueur], piece):
         piece['x'] -= dx
         piece['y'] -= dy
         if dy > 0:  # S'il y a une collision en descendant, on fusionne et crée une nouvelle pièce
-            fusionner_piece_deux(jeu, joueur)
-            verifier_lignes_deux(jeu, joueur)
+            fusionner_piece_deux(jeu,joueur)
+            verifier_lignes_deux(jeu,joueur)
             if not jeu[joueur]['game_over']:
                 nouvelle_piece(jeu[joueur])
         return False
     return True
 
 
-def faire_tomber_piece_deux(jeu, joueur):
+def faire_tomber_piece_deux(jeu,joueur):
     """Fait tomber la pièce directement."""
-    while appliquer_deplacement_deux(jeu, 0, 1, joueur):
+    while appliquer_deplacement_deux(jeu, 0, 1,joueur):
         pass
 
 
 def traiter_touche_deux_joueurs(touche_pressee, jeu):
     """Gère les touches pour deux joueurs."""
-
+    
     # Touches pour le joueur 1
     if touche_pressee == 'Left':
-        appliquer_deplacement_deux(jeu, -1, 0, 'player1')
+        appliquer_deplacement_deux(jeu, -1, 0,'player1')
     elif touche_pressee == 'Right':
-        appliquer_deplacement_deux(jeu, 1, 0, 'player1')
+        appliquer_deplacement_deux(jeu, 1, 0,'player1')
     elif touche_pressee == 'Down':
-        appliquer_deplacement_deux(jeu, 0, 1, 'player1')
+        appliquer_deplacement_deux(jeu, 0, 1,'player1')
     elif touche_pressee == 'Up':
         appliquer_rotation_si_possible(jeu['player1'])
     elif touche_pressee == 'space':
-        faire_tomber_piece_deux(jeu, 'player1')
+        faire_tomber_piece_deux(jeu,'player1')
+    
 
     # Touches pour le joueur 2
     if touche_pressee == 'a':  # Gauche
-        appliquer_deplacement_deux(jeu, -1, 0, 'player2')
+        appliquer_deplacement_deux(jeu, -1, 0,'player2')
     elif touche_pressee == 'd':  # Droite
-        appliquer_deplacement_deux(jeu, 1, 0, 'player2')
+        appliquer_deplacement_deux(jeu, 1, 0,'player2')
     elif touche_pressee == 's':  # Descendre
-        appliquer_deplacement_deux(jeu, 0, 1, 'player2')
+        appliquer_deplacement_deux(jeu, 0, 1,'player2')
     elif touche_pressee == 'z':  # Rotation
         appliquer_rotation_si_possible(jeu['player2'])
     elif touche_pressee == 'x':  # Faire tomber
-        faire_tomber_piece_deux(jeu, 'player2')
-
+        faire_tomber_piece_deux(jeu,'player2')
+    
     # Touches communes
     if touche_pressee == 'p':  # Pause
         pause(jeu)
@@ -819,43 +986,44 @@ def traiter_touche_deux_joueurs(touche_pressee, jeu):
         jeu['game_over'] = True
         main()
 
-
 def mettre_a_jour_jeu_deux_joueurs(jeu):
     """Met à jour l'état du jeu pour deux joueurs."""
     temps_actuel = time.time()
-
+    
     # Joueur 1
     if temps_actuel - jeu['player1']['dernier_tombe'] > jeu['player1']['vitesse_tombe'] / jeu['player1']['level']:
-        appliquer_deplacement_deux(jeu, 0, 1, 'player1')
+        appliquer_deplacement_deux(jeu, 0, 1,'player1')
         jeu['player1']['dernier_tombe'] = temps_actuel
-
+    
     # Joueur 2
     if temps_actuel - jeu['player2']['dernier_tombe'] > jeu['player2']['vitesse_tombe'] / jeu['player2']['level']:
-        appliquer_deplacement_deux(jeu, 0, 1, 'player2')
+        appliquer_deplacement_deux(jeu, 0, 1,'player2')
         jeu['player2']['dernier_tombe'] = temps_actuel
+
 
 
 def nouvelle_piece_deux_joueurs(jeu, joueur):
     """Génère une nouvelle pièce pour un joueur spécifique."""
-    if jeu[joueur]['prochaine_piece'] is None:
-        jeu[joueur]['prochaine_piece'] = creer_piece()
-
-    jeu[joueur]['piece_courante'] = jeu[joueur]['prochaine_piece']
-    jeu[joueur]['prochaine_piece'] = creer_piece()
-
-    if piece_en_collision(jeu[joueur], jeu[joueur]['piece_courante']):
+    if jeu[joueur]['next_piece'] is None:
+        jeu[joueur]['next_piece'] = creer_piece()
+    
+    jeu[joueur]['current_piece'] = jeu[joueur]['next_piece']
+    jeu[joueur]['next_piece'] = creer_piece()
+    
+    if piece_en_collision(jeu[joueur], jeu[joueur]['current_piece']):
         jeu[joueur]['game_over'] = True
         jeu['game_over'] = True
 
 
+
 def initialiser_fenetre2():
     """Initialise la fenêtre du jeu."""
-    cree_fenetre(WINDOW_WIDTH, TAILLE_FENETRE)
+    cree_fenetre(WINDOW_WIDTH, WINDOW_HEIGHT)
 
 
 def generer_ligne_avec_trou(largeur):
     """Génère une ligne de blocs avec un trou à un emplacement aléatoire."""
-    ligne = [random.choice(COLORS) if x != random.randint(0, largeur - 1) else None
+    ligne = [random.choice(COLORS) if x != random.randint(0, largeur-1) else None 
              for x in range(largeur)]
     return ligne
 
@@ -866,66 +1034,72 @@ def ajouter_lignes_attaque(jeu, joueur_attaquant, joueur_defenseur, nb_lignes):
     """
     # Supprimer les lignes du bas du plateau
     for _ in range(nb_lignes):
-        jeu[joueur_defenseur]['grille'].pop(0)
-
+        jeu[joueur_defenseur]['grid'].pop(0)
+        
         # Ajouter de nouvelles lignes avec un trou
         nouvelle_ligne = generer_ligne_avec_trou(LARGEUR_PLATEAU)
-        jeu[joueur_defenseur]['grille'].append(nouvelle_ligne)
+        jeu[joueur_defenseur]['grid'].append(nouvelle_ligne)
 
 
 def verifier_lignes_deux(jeu, joueur):
     """
     Version modifiée de la fonction verifier_lignes pour le mode deux joueurs.
-
+    
     Calcule les lignes complètes et gère l'attaque entre joueurs.
     """
     lignes_vides = 0
 
     # Parcourt chaque ligne de la grille
-    for y in range(TAILLE_GRILLE):
+    for y in range(GRID_HEIGHT):
         ligne_complete = True
         for x in range(LARGEUR_PLATEAU):
-            if jeu[joueur]['grille'][y][x] is None:
+            if jeu[joueur]['grid'][y][x] is None:
                 ligne_complete = False
                 break
 
         if ligne_complete:
-            jeu[joueur]['grille'].pop(y)
+            jeu[joueur]['grid'].pop(y)
 
             ligne_vide = [None] * LARGEUR_PLATEAU
-            jeu[joueur]['grille'].insert(0, ligne_vide)
+            jeu[joueur]['grid'].insert(0, ligne_vide)
 
             lignes_vides += 1
 
     # Met à jour le score et le niveau en fonction des lignes effacées
     # Logique d'attaque entre joueurs
-    if lignes_vides >= 2:
+    if lignes_vides >= 1:
         # Détermine le joueur à attaquer
         joueur_cible = 'player2' if joueur == 'player1' else 'player1'
-
+        
         # Nombre de lignes à envoyer = lignes_vides - 1
         ajouter_lignes_attaque(jeu, joueur, joueur_cible, lignes_vides)
-
+    
     mise_a_jour_score_et_niveau(jeu[joueur], lignes_vides)
-
 
 def fusionner_piece_deux(jeu, joueur):
     """
     Version modifiée de fusionner_piece pour le mode deux joueurs.
-
+    
     Ajoute la pièce courante à la grille du joueur spécifié.
     """
-    piece = jeu[joueur]['piece_courante']
+    piece = jeu[joueur]['current_piece']
     forme = piece['forme']
     couleur = piece['couleur']
     hauteur = len(forme)
     largeur = len(forme[0])
+
     for rel_y in range(hauteur):
         for rel_x in range(largeur):
             if forme[rel_y][rel_x]:
                 grille_y, grille_x = piece['y'] + rel_y, piece['x'] + rel_x
                 if grille_y >= 0:  # Ne pas dessiner en dehors de la grille
-                    jeu[joueur]['grille'][grille_y][grille_x] = couleur
+                    jeu[joueur]['grid'][grille_y][grille_x] = couleur
+
+
+
+
+
+
 
 
 def main():
@@ -933,37 +1107,37 @@ def main():
     # Sélection du mode de jeu
     jeu = mode_selection_menu()
 
-    if jeu is None and GAME_MODES['deux_joueur']:
+    if jeu is None and GAME_MODES['two_player']:
         global WINDOW_WIDTH
 
-        WINDOW_WIDTH *= 2
+        WINDOW_WIDTH*=2
         jeu = creer_etat_jeu_deux_joueurs()
-        jeu['player1']['prochaine_piece'] = creer_piece()
-        jeu['player2']['prochaine_piece'] = creer_piece()
+        jeu['player1']['next_piece'] = creer_piece()
+        jeu['player2']['next_piece'] = creer_piece()
         nouvelle_piece_deux_joueurs(jeu, 'player1')
         nouvelle_piece_deux_joueurs(jeu, 'player2')
         initialiser_fenetre2()
-
+        
         while not jeu['player1']['game_over'] or not jeu['player2']['game_over']:
             ev = donne_ev()
             if ev:
                 type_evt = type_ev(ev)
                 if type_evt == 'Touche':
                     traiter_touche_deux_joueurs(touche(ev), jeu)
-
+        
             mettre_a_jour_jeu_deux_joueurs(jeu)
             dessiner_jeu_deux_joueurs(jeu)
             time.sleep(0.001)
-
+    
         attendre_fin()
-
+   
     # Si aucun jeu n'est chargé, créer un nouveau
     if jeu is None:
         jeu = initialiser_jeu()
-
-    if GAME_MODES['Polymynos_arbitraire'] == True:
+    
+    if GAME_MODES['Polymynos_arbitraire']==True:
         charger_Poly()
-
+    
     initialiser_fenetre()
 
     while not jeu['game_over']:
@@ -971,18 +1145,20 @@ def main():
         mettre_a_jour_jeu(jeu)
         dessiner_jeu(jeu)
         time.sleep(0.001)
-
+    
     attendre_fin()
 
 
-TAILLE_BLOC = 40
+
+BLOC_SIZE = 40
 LARGEUR_PLATEAU = 10
-TAILLE_GRILLE = 20
-WINDOW_WIDTH = LARGEUR_PLATEAU * TAILLE_BLOC + 200
-TAILLE_FENETRE = TAILLE_GRILLE * TAILLE_BLOC
-POLYMINO = []
+GRID_HEIGHT = 20
+WINDOW_WIDTH = LARGEUR_PLATEAU * BLOC_SIZE + 200
+WINDOW_HEIGHT = GRID_HEIGHT * BLOC_SIZE
+POLYMINO=[]
 
 COLORS = ['cyan', 'yellow', 'purple', 'orange', 'blue', 'red', 'green']
+
 
 if __name__ == '__main__':
     main()
