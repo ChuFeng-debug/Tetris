@@ -2,6 +2,9 @@ from fltk import *
 import random
 import time
 import json 
+import os
+
+vitesse_de_base=1.0
 
 # Configurations des mode de jeu
 GAME_MODES = {
@@ -9,8 +12,30 @@ GAME_MODES = {
     'decay': False,
     'two_player': False,
     'Polymynos_arbitraire': False,
-    'Couleur_adjacente':False
+    'Couleur_adjacente':False,
+    'rotation_grille':False,
+    'Polynomes_de_taille_N':False
 }
+
+
+DEFAULT_CONFIG = {
+    "display": {
+        "bloc_size": 40,
+        "grid_width": 10,
+        "grid_height": 20,
+        "sidebar_width": 200
+    },
+    "gameplay": {
+        "level_speed_multiplier": 1.0,
+        "points_multiplier": 1,
+        "decay_interval": 30
+    },
+    "colors": [
+        "cyan", "yellow", "purple", 
+        "orange", "blue", "red", "green"
+    ]
+}
+
 
 
 POINTS_WITH_LEVEL_ENABLED = False
@@ -21,6 +46,9 @@ Tetromino_history={'cyan':[], 'yellow':[], 'purple':[], 'orange':[], 'blue':[], 
 
 BLOC_BONUS=[]
 Multiplicateur=1
+
+temp_depuis_rotation=time.time()
+
 # Tetrominos
 Tetrominos = [
     [[1, 1, 1, 1]],
@@ -32,6 +60,141 @@ Tetrominos = [
     [[0, 1, 1], [1, 1, 0]]
 ]
 
+
+def creer_piece_n(n=4):
+    """Crée une pièce aléatoire de taille n x n et l'ajoute à Tetrominos."""
+    # Crée une pièce n x n vide
+    piece = [[0] * n for _ in range(n)]
+    
+    # Choisir un nombre de blocs à placer aléatoirement dans la pièce
+    nb_blocs = random.randint(1, n * n)
+
+    # Liste des blocs
+    blocs = []
+
+    start_x, start_y = random.randint(0, n - 1), random.randint(0, n - 1)
+    piece[start_y][start_x] = 1
+    blocs.append((start_x, start_y))
+
+    # Ajouter des blocs connectés
+    while len(blocs) < nb_blocs:
+        x, y = random.choice(blocs)
+
+        # Trouver les voisins valides (haut, bas, gauche, droite)
+        voisins = [
+            (x - 1, y),  # Gauche
+            (x + 1, y),  # Droite
+            (x, y - 1),  
+            (x, y + 1)   
+        ]
+
+        # Filtrer les voisins valides (dans les limites de la grille et non déjà occupés)
+        voisins_valides = [(nx, ny) for nx, ny in voisins if 0 <= nx < n and 0 <= ny < n and piece[ny][nx] == 0]
+
+        if voisins_valides:
+            nx, ny = random.choice(voisins_valides)
+            piece[ny][nx] = 1
+            blocs.append((nx, ny))
+    Tetrominos.append(piece)
+
+
+
+def faire_rotation(jeu):
+    a=random.randint(0,1)
+    if a==0:
+        rotation_droite(jeu)
+    else:
+        rotation_gauche(jeu)
+    Bonus_gravite_avec_animation(jeu)
+
+
+
+def rotation_droite(jeu):
+    """Effectue une rotation de la grille d'un quart de tour vers la droite."""
+    hauteur = len(jeu['grid'])
+    largeur = len(jeu['grid'][0])
+
+    # Nouvelle grille vide avec None
+    nouvelle_grille = [[None for _ in range(hauteur)] for _ in range(largeur)]
+
+    for y in range(hauteur):
+        for x in range(largeur):
+            if jeu['grid'][y][x] is not None:
+                # Calcul des nouvelles coordonnées pour une rotation à droite
+                new_x = y
+                new_y = largeur - 1 - x
+                nouvelle_grille[new_y][new_x] = jeu['grid'][y][x]
+
+    # Mise à jour de la grille
+    jeu['grid'] = nouvelle_grille
+
+def rotation_gauche(jeu):
+    """Effectue une rotation de la grille d'un quart de tour vers la gauche."""
+    hauteur = len(jeu['grid'])
+    largeur = len(jeu['grid'][0])
+
+    # Nouvelle grille vide avec None
+    nouvelle_grille = [[None for _ in range(hauteur)] for _ in range(largeur)]
+
+    for y in range(hauteur):
+        for x in range(largeur):
+            if jeu['grid'][y][x] is not None:
+                # Calcul des nouvelles coordonnées pour une rotation à gauche
+                new_x = hauteur - 1 - y
+                new_y = x
+                nouvelle_grille[new_y][new_x] = jeu['grid'][y][x]
+
+    # Mise à jour de la grille
+    jeu['grid'] = nouvelle_grille
+
+
+
+def load_config(filename='tetris_config.json'):
+    try:
+        if not os.path.exists(filename):
+            save_config(DEFAULT_CONFIG)
+            return DEFAULT_CONFIG
+            
+        with open(filename, 'r') as f:
+            user_config = json.load(f)
+            config = DEFAULT_CONFIG.copy()
+            for category in user_config:
+                if category in config:
+                    if isinstance(config[category], dict):
+                        config[category].update(user_config[category])
+                    else:
+                        config[category] = user_config[category]
+        return config
+    except Exception as e:
+        print(f"Error loading config: {e}")
+        return DEFAULT_CONFIG
+    
+
+def charger_config():
+    global BLOC_SIZE,LARGEUR_PLATEAU,GRID_HEIGHT,WINDOW_WIDTH,WINDOW_HEIGHT,COLORS,DECAY_INTERVAL,vitesse_de_base
+    config = load_config()
+    BLOC_SIZE = config['display']['bloc_size']
+    LARGEUR_PLATEAU = config['display']['grid_width']
+    GRID_HEIGHT = config['display']['grid_height']
+    WINDOW_WIDTH, WINDOW_HEIGHT = get_window_dimensions(config)
+    COLORS = config['colors']
+    DECAY_INTERVAL = config['gameplay']['decay_interval']
+    vitesse_de_base=config['gameplay']['level_speed_multiplier']
+
+
+def save_config(config, filename='tetris_config.json'):
+    try:
+        with open(filename, 'w') as f:
+            json.dump(config, f, indent=4, default=str)
+        print(f"Config saved to {filename}")
+    except Exception as e:
+        print(f"Error saving config: {e}")
+
+def get_window_dimensions(config):
+    display = config['display']
+    width = display['bloc_size'] * display['grid_width'] + display['sidebar_width']
+    height = display['bloc_size'] * display['grid_height']
+    return width, height
 
 
 def effacage_du_plateau_entier(jeu):
@@ -46,7 +209,25 @@ def Desactiver_bonus(jeu):
     if time.time()-temp_depuis_bonus>10:
       Multiplicateur=1
 
+def Bonus_gravite_avec_animation(jeu, delai=0.1):
+    """Applique la gravité avec une animation progressive visible."""
+    M = jeu['grid']
+    hauteur = len(M)
+    largeur = len(M[0])
+    changement = True
 
+    while changement:  # Continue tant qu'il y a des blocs qui peuvent tomber
+        changement = False
+        for j in range(largeur):
+            for i in range(hauteur - 1, 0, -1):  # Parcours de bas en haut
+                if M[i][j] is None and M[i - 1][j] is not None:
+                    # Échange le bloc du dessus avec l'espace vide
+                    M[i][j], M[i - 1][j] = M[i - 1][j], None
+                    changement = True
+
+        # Affiche la grille après une étape et attend un moment
+        dessiner_jeu(jeu,False)
+        time.sleep(delai)
 
 def Bonus_gravite(jeu):
     M=jeu['grid']
@@ -137,8 +318,8 @@ def mode_decay(jeu):
     temps_actuel = time.time()
     if temps_actuel - jeu.get('last_decay_time', 0) > DECAY_INTERVAL:
         occupied_cells = [
-            (y, x) for y in range(GRID_HEIGHT) 
-            for x in range(LARGEUR_PLATEAU) 
+            (y, x) for y in range(len(jeu['grid'])) 
+            for x in range(len(jeu['grid'][0])) 
             if jeu['grid'][y][x] is not None
         ]
         
@@ -219,10 +400,10 @@ def save_game(jeu, filename='tetris_save.json'):
 
 def mode_selection_menu():
     """Menu amélioré pour la sélection du mode de jeu et des points"""
-    cree_fenetre(WINDOW_WIDTH, WINDOW_HEIGHT)
+    cree_fenetre(WINDOW_WIDTH, WINDOW_HEIGHT+100)
     
     # Liste étendue des modes pour plusieurs sélections
-    modes = ['Standard', 'Détérioration', 'Deux joueurs', 'Points avec niveaux', 'Polymynos arbitraire','Couleur adjacente','Bonus']
+    modes = ['Standard', 'Détérioration', 'Deux joueurs', 'Points avec niveaux', 'Polymynos arbitraire','Couleur adjacente','Bonus','Rotation grille','Polynomes de taille N']
     selected_modes = [False] * len(modes)
     current_selection = 0
     
@@ -250,13 +431,11 @@ def mode_selection_menu():
             texte(WINDOW_WIDTH // 2 - 100, 165 + i * 70, mode, couleur)
         
         # Instructions
-        texte(WINDOW_WIDTH // 2 - 250, WINDOW_HEIGHT - 150, 
-              "HAUT/BAS pour naviguer", "blue")
-        texte(WINDOW_WIDTH // 2 - 250, WINDOW_HEIGHT - 120, 
+        texte(WINDOW_WIDTH // 2 - 250, WINDOW_HEIGHT-20, 
               "ESPACE pour sélectionner/décocher", "blue")
-        texte(WINDOW_WIDTH // 2 - 250, WINDOW_HEIGHT - 90, 
+        texte(WINDOW_WIDTH // 2 - 250, WINDOW_HEIGHT +10, 
               "ENTRÉE pour confirmer", "blue")
-        texte(WINDOW_WIDTH // 2 - 250, WINDOW_HEIGHT - 60, 
+        texte(WINDOW_WIDTH // 2 - 250, WINDOW_HEIGHT +40, 
               "Appuyez sur L pour charger une partie", "blue")
         
         mise_a_jour()
@@ -284,10 +463,15 @@ def mode_selection_menu():
                 GAME_MODES['Polymynos_arbitraire'] = selected_modes[4]
                 GAME_MODES['Couleur_adjacente'] = selected_modes[5]
                 GAME_MODES['Bonus'] = selected_modes[6]
+                GAME_MODES['rotation_grille']=selected_modes[7]
+                GAME_MODES['Polynomes_de_taille_N']=selected_modes[8]
                 POINTS_WITH_LEVEL_ENABLED = selected_modes[3]
                 
                 ferme_fenetre()
                 return None
+
+            elif touche_pressee=="e":
+                charger_config()
             elif touche_pressee == 'l':
                 # Option pour charger une partie
                 loaded_game = load_game()
@@ -323,7 +507,7 @@ def piece_en_collision(jeu, piece):
                 grille_x = piece['x'] + rel_x
                 grille_y = piece['y'] + rel_y
                 
-                if grille_x < 0 or grille_x >= LARGEUR_PLATEAU or grille_y >= GRID_HEIGHT:
+                if grille_x < 0 or grille_x >= len(jeu['grid'][0]) or grille_y >= len(jeu['grid']):
                     return True
                 if grille_y >= 0 and jeu['grid'][grille_y][grille_x] is not None:
                     return True
@@ -430,14 +614,14 @@ def verifier_et_remplacer(grille, tetromino_history, couleur,jeu):
 
 def verifier_lignes(jeu):
     """Vérifie les lignes complètes, les supprime, met à jour Tetromino_history et décale les blocs."""
-    global Tetromino_history,BLOC_BONUS,temp_depuis_bonus
+    global Tetromino_history,BLOC_BONUS,temp_depuis_bonus,temp_depuis_rotation
     lignes_vides = 0
     lignes_supprimees = []  # Liste pour stocker les numéros des lignes supprimées
 
     # Parcourt chaque ligne de la grille (de bas en haut pour éviter les décalages)
-    for y in range(GRID_HEIGHT - 1, -1, -1):  # Commence par la dernière ligne
+    for y in range(len(jeu['grid']) - 1, -1, -1):  # Commence par la dernière ligne
         ligne_complete = True
-        for x in range(LARGEUR_PLATEAU):
+        for x in range(len(jeu['grid'][0])):
             if jeu['grid'][y][x] is None:
                 ligne_complete = False
                 break
@@ -478,6 +662,12 @@ def verifier_lignes(jeu):
                 if nouvelle_piece:
                     nouvelles_pieces.append(nouvelle_piece)
             Tetromino_history[couleur] = nouvelles_pieces
+    
+    if GAME_MODES['rotation_grille']:
+        if time.time()-temp_depuis_rotation>20:
+            temp_depuis_rotation=time.time()
+            faire_rotation(jeu)
+    
     if GAME_MODES['Bonus']:
         a=random.randint(0,5)
         b=random.randint(0,5)
@@ -497,7 +687,6 @@ def fusionner_piece(jeu):
     couleur = piece['couleur']
     hauteur = len(forme)
     largeur = len(forme[0])
-    
     # Liste pour stocker les coordonnées de cette pièce
     piece_coords = []
 
@@ -509,9 +698,9 @@ def fusionner_piece(jeu):
                 if grille_y >= 0:  # Ne pas dessiner en dehors de la grille
                     jeu['grid'][grille_y][grille_x] = couleur
                     piece_coords.append([grille_y, grille_x])
-    
-    global Tetromino_history
-    Tetromino_history[couleur].append(piece_coords)
+    if GAME_MODES['Couleur_adjacente']:
+        global Tetromino_history
+        Tetromino_history[couleur].append(piece_coords)
 
 
 
@@ -554,9 +743,8 @@ def dessiner_prochaine_piece(jeu):
     """Dessine la prochaine pièce dans une zone à droite du plateau."""
     if jeu['next_piece']:
         # Position de la zone d'aperçu
-        preview_x = LARGEUR_PLATEAU * BLOC_SIZE +25
-        preview_y = 200
-        
+        preview_x = len(jeu['grid'][0]) * BLOC_SIZE +25
+        preview_y = 200       
         
         texte(preview_x - 20, preview_y - 30, "Prochaine", "black")
         
@@ -617,25 +805,27 @@ def creer_etat_jeu():
         'lines_cleared': 0
     }
 
-def dessiner_grille():
+def dessiner_grille(jeu):
     """Dessine la grille de jeu avec les lignes verticales et horizontales."""
     # Dessiner les lignes verticales
-    for x in range(LARGEUR_PLATEAU + 1):
-        ligne(x * BLOC_SIZE, 0, x * BLOC_SIZE, GRID_HEIGHT * BLOC_SIZE, "white")
+    for x in range(len(jeu['grid'][0]) + 1):
+        ligne(x * BLOC_SIZE, 0, x * BLOC_SIZE, len(jeu['grid']) * BLOC_SIZE, "white")
 
     # Dessiner les lignes horizontales
-    for y in range(GRID_HEIGHT + 1):
-        ligne(0, y * BLOC_SIZE, LARGEUR_PLATEAU * BLOC_SIZE, y * BLOC_SIZE, "white")
+    for y in range(len(jeu['grid']) + 1):
+        ligne(0, y * BLOC_SIZE, len(jeu['grid'][0]) * BLOC_SIZE, y * BLOC_SIZE, "white")
 
 def dessiner_contenu_grille(jeu):
     """Dessine le contenu actuel de la grille."""
-    for y in range(GRID_HEIGHT):
-        for x in range(LARGEUR_PLATEAU):
+    for y in range(len(jeu['grid'])):
+        for x in range(len(jeu['grid'][0])):
             color = jeu['grid'][y][x]
             if color:
                 rectangle(x * BLOC_SIZE, y * BLOC_SIZE,
                           (x + 1) * BLOC_SIZE, (y + 1) * BLOC_SIZE,
                           color, color)
+
+
 
 def dessiner_piece_courante(jeu):
     """Dessine la pièce courante sur la grille."""
@@ -658,19 +848,20 @@ def dessiner_piece_courante(jeu):
 
 def dessiner_scores(jeu):
     """Dessine le score, le niveau et le nombre de lignes effacées."""
-    texte(LARGEUR_PLATEAU * BLOC_SIZE + 20, 50, "Score: " + str(jeu['score']), "black")
-    texte(LARGEUR_PLATEAU * BLOC_SIZE + 20, 80, "Niveau: " + str(jeu['level']), "black")
-    texte(LARGEUR_PLATEAU * BLOC_SIZE + 20, 110, "Lignes: " + str(jeu['lines_cleared']), "black")
+    texte(len(jeu['grid'][0]) * BLOC_SIZE + 20, 50, "Score: " + str(jeu['score']), "black")
+    texte(len(jeu['grid'][0]) * BLOC_SIZE + 20, 80, "Niveau: " + str(jeu['level']), "black")
+    texte(len(jeu['grid'][0]) * BLOC_SIZE + 20, 110, "Lignes: " + str(jeu['lines_cleared']), "black")
     if jeu['game_over']:
-        texte(LARGEUR_PLATEAU * BLOC_SIZE // 2 - 40, GRID_HEIGHT * BLOC_SIZE // 2, "GAME OVER", "red")
+        texte(len(jeu['grid'][0]) * BLOC_SIZE // 2 - 40, len(jeu['grid']) * BLOC_SIZE // 2, "GAME OVER", "red")
 
-def dessiner_jeu(jeu):
+def dessiner_jeu(jeu,c=True):
     """Dessine l'état actuel du jeu."""
     efface_tout()
-    rectangle(0, 0, LARGEUR_PLATEAU * BLOC_SIZE, GRID_HEIGHT * BLOC_SIZE, "black", "black")
-    dessiner_grille()  # Dessine la grille
+    rectangle(0, 0, len(jeu['grid'][0]) * BLOC_SIZE, len(jeu['grid']) * BLOC_SIZE, "black", "black")
+    dessiner_grille(jeu)  # Dessine la grille
     dessiner_contenu_grille(jeu)  # Dessine le contenu de la grille
-    dessiner_piece_courante(jeu)  # Dessine la pièce courante
+    if c:
+        dessiner_piece_courante(jeu)  # Dessine la pièce courante
     dessiner_scores(jeu)  # Dessine le score et le niveau
     dessiner_prochaine_piece(jeu)  # Dessine la prochaine pièce
     if GAME_MODES['decay']==True:
@@ -701,16 +892,21 @@ def pause(jeu):
 
 def initialiser_fenetre():
     """Initialise la fenêtre du jeu."""
-    cree_fenetre(WINDOW_WIDTH, WINDOW_HEIGHT)
+    if GAME_MODES['rotation_grille']:
+        cree_fenetre(WINDOW_HEIGHT*2 ,WINDOW_HEIGHT)
+    else:
+        cree_fenetre(WINDOW_WIDTH, WINDOW_HEIGHT)
+
 
 def initialiser_jeu():
     """Initialise l'état du jeu avec les options choisies."""
+    global vitesse_de_base
     jeu = creer_etat_jeu()
     jeu['points_with_level'] = POINTS_WITH_LEVEL_ENABLED
     jeu['next_piece'] = creer_piece()
     nouvelle_piece(jeu)
     jeu['dernier_tombe'] = time.time()
-    jeu['vitesse_tombe'] = 1.0
+    jeu['vitesse_tombe'] = vitesse_de_base
     return jeu
 
 def gerer_entrees_utilisateur(jeu):
@@ -1130,7 +1326,12 @@ def main():
             time.sleep(0.001)
     
         attendre_fin()
-   
+    print('a')
+    if GAME_MODES['Polynomes_de_taille_N']:
+        a=int(input("Entrez la hauteur de la piece"))
+        for i in range(6):
+            creer_piece_n(a)
+            
     # Si aucun jeu n'est chargé, créer un nouveau
     if jeu is None:
         jeu = initialiser_jeu()
