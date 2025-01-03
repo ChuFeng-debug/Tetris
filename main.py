@@ -62,40 +62,46 @@ Tetrominos = [
 
 
 def creer_piece_n(n=4):
-    """Crée une pièce aléatoire de taille n x n et l'ajoute à Tetrominos."""
-    # Crée une pièce n x n vide
-    piece = [[0] * n for _ in range(n)]
+    """
+    Crée 7 pièces aléatoires de hauteur maximale n.
+    """
+    global Tetrominos
     
-    # Choisir un nombre de blocs à placer aléatoirement dans la pièce
-    nb_blocs = random.randint(1, n * n)
+    # Vérifier que n ne dépasse pas la largeur du plateau
+    if n > LARGEUR_PLATEAU:
+        print(f"Taille invalide: {n}. La taille doit être inférieure à la largeur du plateau ({LARGEUR_PLATEAU})")
+        return
 
-    # Liste des blocs
-    blocs = []
-
-    start_x, start_y = random.randint(0, n - 1), random.randint(0, n - 1)
-    piece[start_y][start_x] = 1
-    blocs.append((start_x, start_y))
-
-    # Ajouter des blocs connectés
-    while len(blocs) < nb_blocs:
-        x, y = random.choice(blocs)
-
-        # Trouver les voisins valides (haut, bas, gauche, droite)
-        voisins = [
-            (x - 1, y),  # Gauche
-            (x + 1, y),  # Droite
-            (x, y - 1),  
-            (x, y + 1)   
-        ]
-
-        # Filtrer les voisins valides (dans les limites de la grille et non déjà occupés)
-        voisins_valides = [(nx, ny) for nx, ny in voisins if 0 <= nx < n and 0 <= ny < n and piece[ny][nx] == 0]
-
-        if voisins_valides:
-            nx, ny = random.choice(voisins_valides)
-            piece[ny][nx] = 1
-            blocs.append((nx, ny))
-    Tetrominos.append(piece)
+    # Liste pour stocker les nouvelles pièces
+    nouvelles_pieces = []
+    
+    for _ in range(7):  # Créer 7 pièces différentes
+        hauteur = random.randint(1, n)  # Hauteur aléatoire entre 1 et n
+        largeur = random.randint(1, n)  # Largeur aléatoire entre 1 et n
+        
+        # Créer une pièce avec des 1 et des 0 aléatoires
+        piece = []
+        for _ in range(hauteur):
+            ligne = []
+            for _ in range(largeur):
+                # 70% de chance d'avoir un bloc (1)
+                ligne.append(1 if random.random() < 0.7 else 0)
+            piece.append(ligne)
+        
+        # S'assurer qu'il y a au moins un bloc dans la pièce
+        if all(all(cell == 0 for cell in ligne) for ligne in piece):
+            piece[0][0] = 1
+            
+        nouvelles_pieces.append(piece)
+    
+    # Mettre à jour la liste des Tetrominos avec les nouvelles pièces
+    Tetrominos = nouvelles_pieces
+    
+    print(f"\nCréé 7 nouveaux Tetrominos de taille maximale {n}")
+    for i, piece in enumerate(nouvelles_pieces, 1):
+        print(f"\nPièce {i}:")
+        for ligne in piece:
+            print("".join('#' if cell else '.' for cell in ligne))7
 
 
 
